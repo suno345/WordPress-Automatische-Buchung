@@ -1,0 +1,114 @@
+<!-- リード文 -->
+<div class="p-entry__content">
+    <p class="has-text-align-center">
+        {{ product.description|truncate(200) }}
+    </p>
+</div>
+
+<!-- 作品情報テーブル -->
+<div class="p-entry__content">
+    <h3 class="c-heading">作品情報</h3>
+    <table class="c-table">
+        <tbody>
+            {% if taxonomies.custom.circle_name %}
+            <tr>
+                <th>サークル名</th>
+                <td>
+                    <a href="/circle/{{ taxonomies.custom.circle_name[0]|urlencode }}">
+                        {{ taxonomies.custom.circle_name[0] }}
+                    </a>
+                </td>
+            </tr>
+            {% endif %}
+            
+            {% if taxonomies.tags %}
+            <tr>
+                <th>作者名</th>
+                <td>
+                    {% for author in taxonomies.tags %}
+                    <a href="/tag/{{ author|urlencode }}">{{ author }}</a>
+                    {%- if not loop.last %}, {% endif %}
+                    {% endfor %}
+                </td>
+            </tr>
+            {% endif %}
+            
+            {% if taxonomies.custom.original_work %}
+            <tr>
+                <th>原作名</th>
+                <td>
+                    <a href="/original/{{ taxonomies.custom.original_work[0]|urlencode }}">
+                        {{ taxonomies.custom.original_work[0] }}
+                    </a>
+                </td>
+            </tr>
+            {% endif %}
+            
+            {% if taxonomies.custom.character_name %}
+            <tr>
+                <th>キャラ名</th>
+                <td>
+                    <a href="/character/{{ taxonomies.custom.character_name[0]|urlencode }}">
+                        {{ taxonomies.custom.character_name[0] }}
+                    </a>
+                </td>
+            </tr>
+            {% endif %}
+            
+            {% if taxonomies.custom.product_format %}
+            <tr>
+                <th>作品形式</th>
+                <td>{{ taxonomies.custom.product_format[0] }}</td>
+            </tr>
+            {% endif %}
+            
+            {% if product.page_count %}
+            <tr>
+                <th>ページ数</th>
+                <td>{{ product.page_count }}ページ</td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<!-- サンプル画像 -->
+<div class="p-entry__content">
+    {% if product.sample_images %}
+    {% for image in product.sample_images %}
+    <figure class="wp-block-image">
+        <img src="{{ image.url }}" alt="{{ image.alt }}" loading="lazy">
+    </figure>
+    {% endfor %}
+    {% endif %}
+</div>
+
+<!-- ストーリー/紹介文 -->
+<div class="p-entry__content">
+    <p>{{ product.description }}</p>
+</div>
+
+<!-- アフィリエイトリンク -->
+<div class="p-entry__content">
+    <div class="wp-block-buttons">
+        <div class="wp-block-button">
+            <a class="wp-block-button__link" href="{{ product.affiliate_url }}" style="background-color: #ff6600;">
+                FANZAでこの作品をチェックする
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- 無料で読める？セクション -->
+<div class="p-entry__content">
+    <h2 class="c-heading">「{{ product.title }}{% if taxonomies.custom.character_name %}【{{ taxonomies.custom.character_name[0] }}】{% endif %}」は無料で読める？</h2>
+    <p>結論からお伝えすると、この作品はFANZAでの購入が必要な有料作品です。無料試し読みが可能な場合もありますが、全編を無料で読むことはできません。高品質な作品を適正な価格で楽しみましょう。</p>
+</div>
+
+<!-- 関連記事 -->
+<div class="p-entry__content">
+    <h2 class="c-heading">関連作品</h2>
+    <div class="p-related">
+        <!-- 関連記事はWordPressの機能で自動生成 -->
+    </div>
+</div> 

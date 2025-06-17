@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  fanza-blogger:
+    build: .
+    volumes:
+      - ./.env:/app/.env
+      - ./cache:/app/cache
+      - ./logs:/app/logs
+    environment:
+      - TZ=Asia/Tokyo
+    restart: unless-stopped
+    command: --daily  # デフォルトは日次スケジュール
+
+  # キーワードスケジュール用のサービス
+  fanza-blogger-keyword:
+    build: .
+    volumes:
+      - ./.env:/app/.env
+      - ./cache:/app/cache
+      - ./logs:/app/logs
+    environment:
+      - TZ=Asia/Tokyo
+    restart: unless-stopped
+    command: --keyword "キーワード"  # キーワードを指定して実行 

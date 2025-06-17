@@ -1,0 +1,1151 @@
+dmm_fanza_api:
+  apis:
+    - name: 商品API
+      description: DMM.com の商品の情報を取得することが可能なAPI です。
+      request_url: https://api.dmm.com/affiliate/v3/ItemList?api_id=[APIID]&affiliate_id=[アフィリエイトID]&site=FANZA&service=digital&floor=videoa&hits=10&sort=date&keyword=%e4%b8%8a%e5%8e%9f%e4%ba%9c%e8%a1%a3&output=json
+      notes:
+        - APIID・アフィリエイトIDを入力する際には、前後の[ ]は不要です。
+        - DMM TVおよびプレミアムについて (※詳細不明なため、テキストのまま記載)
+      request_parameters:
+        - logical_name: APIID
+          physical_name: api_id
+          required: true
+          sample_value: null
+          description: 登録時に割り振られたID
+        - logical_name: アフィリエイトID
+          physical_name: affiliate_id
+          required: true
+          sample_value: affiliate-990
+          description: 登録時に割り振られた990～999までのアフィリエイトID
+        - logical_name: サイト
+          physical_name: site
+          required: true
+          sample_value: FANZA
+          description: 一般（DMM.com）かアダルト（FANZA）か
+        - logical_name: サービス
+          physical_name: service
+          required: false
+          sample_value: digital
+          description: フロアAPIから取得できるサービスコードを指定
+        - logical_name: フロア
+          physical_name: floor
+          required: false
+          sample_value: videoa
+          description: フロアAPIから取得できるフロアコードを指定
+        - logical_name: 取得件数
+          physical_name: hits
+          required: false
+          sample_value: 20
+          description: 初期値：20　最大：100
+        - logical_name: 検索開始位置
+          physical_name: offset
+          required: false
+          sample_value: 1
+          description: 初期値：1　最大：50000
+        - logical_name: ソート順
+          physical_name: sort
+          required: false
+          sample_value: rank
+          description: |
+            初期値：rank
+            人気：rank
+            価格が高い順：price
+            価格が安い順：-price
+            発売日：date
+            評価：review
+            マッチング順：match
+        - logical_name: キーワード
+          physical_name: keyword
+          required: false
+          sample_value: 上原亜衣
+          description: UTF-8で指定。キーワード検索のヒント(※詳細不明)
+        - logical_name: 商品ID
+          physical_name: cid
+          required: false
+          sample_value: 15dss00145
+          description: 商品に振られているcontent_id
+        - logical_name: 絞りこみ項目
+          physical_name: article
+          required: false
+          sample_value: actress
+          description: |
+            女優：actress
+            作者：author
+            ジャンル：genre
+            シリーズ：series
+            メーカー：maker
+            絞り込み項目を複数設定する場合、パラメータ名を配列化します。例：&article[0]=genre&article[1]=actress
+        - logical_name: 絞り込みID
+          physical_name: article_id
+          required: false
+          sample_value: 1011199
+          description: |
+            上記絞り込み項目のID(各検索APIから取得可能)
+            絞り込み項目を複数設定する場合、パラメータ名を配列化します。例：&article_id[0]=111111&article_id[1]=222222
+        - logical_name: 発売日絞り込み (以降)
+          physical_name: gte_date
+          required: false
+          sample_value: 2016-04-01T00:00:00
+          description: このパラメータで指定した日付以降に発売された商品を絞り込むことができます。ISO8601形式でフォーマットした日付を指定してください。(ただし、タイムゾーンは指定できません)
+        - logical_name: 発売日絞り込み (以前)
+          physical_name: lte_date
+          required: false
+          sample_value: 2016-04-30T23:59:59
+          description: このパラメータで指定した日付以前に発売された商品を絞り込むことができます。フォーマットはgte_dateと同じです。
+        - logical_name: 在庫絞り込み
+          physical_name: mono_stock
+          required: false
+          sample_value: mono
+          description: |
+            初期値：絞り込みなし
+            在庫あり：stock
+            予約商品（在庫あり）：reserve
+            予約商品（キャンセル待ち）：reserve_empty
+            DMM通販のみ：mono
+            マーケットプレイスのみ：dmp
+            ※通販サービスのみ指定可能
+        - logical_name: 出力形式
+          physical_name: output
+          required: false
+          sample_value: json
+          description: json / xml
+        - logical_name: コールバック
+          physical_name: callback
+          required: false
+          sample_value: callback
+          description: 出力形式jsonで指定した場合に、このパラメータでコールバック関数名を指定すると、JSONP形式で出力されます
+      response_fields:
+        - field: request
+          description: null
+          example: null
+          children:
+            - field: parameters
+              description: null
+              example: null
+              children: # This is a list of parameter objects
+                - field: parameter
+                  description: リクエストパラメータ (リスト)
+                  children: # Structure of each parameter object in the list
+                    - field: name
+                      description: パラメータ名
+                      example: site
+                    - field: value
+                      description: 値
+                      example: FANZA
+        - field: result
+          description: null
+          example: null
+          children:
+            - field: status
+              description: ステータスコード
+              example: 200
+            - field: result_count
+              description: 取得件数
+              example: 20
+            - field: total_count
+              description: 全体件数
+              example: 50000
+            - field: first_position
+              description: 検索開始位置
+              example: 1
+            - field: items
+              description: 商品情報 (リスト)
+              children: # Structure of each item object in the list
+                - field: service_code
+                  description: サービスコード
+                  example: digital
+                - field: service_name
+                  description: サービス名
+                  example: 動画
+                - field: floor_code
+                  description: フロアコード
+                  example: videoa
+                - field: floor_name
+                  description: フロア名
+                  example: ビデオ
+                - field: category_name
+                  description: カテゴリ名
+                  example: ビデオ (動画)
+                - field: content_id
+                  description: 商品ID
+                  example: 15dss00145
+                - field: product_id
+                  description: 品番
+                  example: 15dss00145dl
+                - field: title
+                  description: タイトル
+                  example: GET！！ 素人ナンパ Best100！！ 街角女子ベスト100人 8時間
+                - field: volume
+                  description: 収録時間 or ページ数
+                  example: 350
+                - field: number
+                  description: 巻数
+                  example: 3
+                - field: review
+                  description: レビュー平均点
+                  children:
+                    - field: count
+                      description: レビュー数
+                      example: 8
+                    - field: average
+                      description: レビュー平均点
+                      example: 3.13
+                - field: URL
+                  description: 商品ページURL
+                  example: http://www.dmm.co.jp/digital/videoa/-/detail/=/cid=15dss00145/
+                - field: affiliateURL
+                  description: アフィリエイトリンクURL
+                  example: https://al.dmm.co.jp/?lurl=http%3A%2F%2Fwww.dmm.co.jp%2Fdigital%2Fvideoa%2F-%2Fdetail%2F%3D%2Fcid%3D15dss00145%2F&af_id=affiliate-990&ch=api
+                - field: imageURL
+                  description: 画像URL
+                  children:
+                    - field: list
+                      description: リストページ用
+                      example: http://pics.dmm.co.jp/digital/video/15dss00145/15dss00145pt.jpg
+                    - field: small
+                      description: 末端用（小）
+                      example: http://pics.dmm.co.jp/digital/video/15dss00145/15dss00145ps.jpg
+                    - field: large
+                      description: 末端用（大）
+                      example: http://pics.dmm.co.jp/digital/video/15dss00145/15dss00145pl.jpg
+                - field: tachiyomi
+                  description: null
+                  children:
+                    - field: URL
+                      description: 立ち読みページURL
+                      example: http://book.dmm.co.jp/tachiyomi/?product_id=b468acown00017&item_id=b468acown00017&shop=digital_book
+                    - field: affilaiteURL # sic (original typo)
+                      description: 立ち読みアフィリエイトリンクURL
+                      example: https://al.dmm.co.jp/?lurl=http%3A%2F%2Fbook.dmm.co.jp%2Ftachiyomi%2F%3Fproduct_id%3Db468acown00017%26item_id%3Db468acown00017%26shop%3Ddigital_book&af_id=affiliate-990&ch=api
+                - field: sampleImageURL
+                  description: サンプル画像URL
+                  children:
+                    - field: sample_s
+                      description: サンプル（小）リスト (オブジェクトのリスト)
+                      children: # Structure of each object in sample_s list
+                        - field: image
+                          description: サンプル画像（小）
+                          example: http://pics.dmm.co.jp/digital/video/15dss00145/15dss00145-1.jpg
+                    - field: sample_l
+                      description: サンプル（大）リスト (オブジェクトのリスト)
+                      children: # Structure of each object in sample_l list
+                        - field: image
+                          description: サンプル画像（大）
+                          example: http://pics.dmm.co.jp/digital/video/15dss00145/15dss00145jp-1.jpg
+                - field: sampleMovieURL
+                  description: サンプル動画URL
+                  children:
+                    - field: size_476_306
+                      description: 476×306
+                      example: http://www.dmm.co.jp/litevideo/-/part/=/cid=15dss145/size=476_306/affi_id=affiliate-990/
+                    - field: size_560_360
+                      description: 560×360
+                      example: http://www.dmm.co.jp/litevideo/-/part/=/cid=15dss145/size=560_360/affi_id=affiliate-990/
+                    - field: size_644_414
+                      description: 644×414
+                      example: http://www.dmm.co.jp/litevideo/-/part/=/cid=15dss145/size=644_414/affi_id=affiliate-990/
+                    - field: size_720_480
+                      description: 720×480
+                      example: http://www.dmm.co.jp/litevideo/-/part/=/cid=15dss145/size=720_480/affi_id=affiliate-990/
+                    - field: pc_flag
+                      description: PC対応しているか
+                      example: 1
+                    - field: sp_flag
+                      description: スマホ対応しているか
+                      example: 1
+                - field: prices
+                  description: 価格
+                  children:
+                    - field: price
+                      description: 金額
+                      example: "300～"
+                    - field: list_price
+                      description: 定価
+                      example: null
+                    - field: deliveries
+                      description: 配信リスト (オブジェクトのリスト)
+                      children: # Structure of each delivery object in the list
+                        - field: delivery
+                          description: 配信
+                          children:
+                            - field: type
+                              description: 配信タイプ
+                              example: stream
+                            - field: price
+                              description: 配信価格
+                              example: 300
+                - field: date
+                  description: 発売日、配信開始日、貸出開始日
+                  example: 2012/8/3 10:00
+                - field: iteminfo
+                  description: 商品詳細
+                  children:
+                    - field: genre
+                      description: ジャンル (オブジェクトのリスト)
+                      children: # Structure of each genre object
+                        - field: name
+                          description: ジャンル名
+                          example: ベスト・総集編
+                        - field: id
+                          description: ジャンルID
+                          example: 6003
+                    - field: series
+                      description:シリーズ (オブジェクトのリスト)
+                      children: # Structure of each series object
+                        - field: name
+                          description: シリーズ名
+                          example: GETシリーズ
+                        - field: id
+                          description: シリーズID
+                          example: 1006
+                    - field: maker
+                      description: メーカー (オブジェクトのリスト)
+                      children: # Structure of each maker object
+                        - field: name
+                          description: メーカー名
+                          example: 桃太郎映像出版
+                        - field: id
+                          description: メーカーID
+                          example: 40016
+                    - field: actor
+                      description: 出演者（一般作品のみ） (オブジェクトのリスト)
+                      children: # Structure of each actor object
+                        - field: name
+                          description: 出演者名
+                          example: null
+                        - field: id
+                          description: 出演者ID
+                          example: null
+                    - field: actress
+                      description: 女優（アダルト作品のみ） (オブジェクトのリスト)
+                      children: # Structure of each actress object
+                        - field: name
+                          description: 女優名
+                          example: 小澤マリア
+                        - field: id
+                          description: 女優ID
+                          example: 15187
+                    - field: director
+                      description: 監督 (オブジェクトのリスト)
+                      children: # Structure of each director object
+                        - field: name
+                          description: 監督名
+                          example: null
+                        - field: id
+                          description: 監督ID
+                          example: null
+                    - field: author
+                      description: 作家、原作者、著者 (オブジェクトのリスト)
+                      children: # Structure of each author object
+                        - field: name
+                          description: 作家、原作者、著者名
+                          example: null
+                        - field: id
+                          description: 作家、原作者、著者ID
+                          example: null
+                    - field: label
+                      description: レーベル (オブジェクトのリスト)
+                      children: # Structure of each label object
+                        - field: name
+                          description: レーベル名
+                          example: LADY HUNTERS
+                        - field: id
+                          description: レーベルID
+                          example: 76
+                    - field: type # Note: This seems generic, assuming name/id structure like others
+                      description: タイプ (オブジェクトのリスト)
+                      children:
+                        - field: name
+                          description: タイプ名
+                          example: null
+                        - field: id
+                          description: タイプID
+                          example: null
+                    - field: color # Assuming name/id structure
+                      description: カラー (オブジェクトのリスト)
+                      children:
+                        - field: name
+                          description: カラー名
+                          example: null
+                        - field: id
+                          description: カラーID
+                          example: null
+                    - field: size # Assuming name/id structure
+                      description: サイズ (オブジェクトのリスト)
+                      children:
+                        - field: name
+                          description: サイズ名
+                          example: null
+                        - field: id
+                          description: サイズID
+                          example: null
+                - field: cdinfo
+                  description: CD情報
+                  children:
+                    - field: kind
+                      description: アルバム、シングル
+                      example: null
+                - field: jancode
+                  description: JANコード
+                  example: 4988135965905
+                - field: maker_product
+                  description: メーカー品番
+                  example: 10003-54653
+                - field: isbn
+                  description: ISBN
+                  example: null
+                - field: stock
+                  description: 在庫状況
+                  example: reserve
+                - field: directory
+                  description: パンくずリスト (オブジェクトのリスト)
+                  children: # Structure of each directory object
+                    - field: id
+                      description: パンくずID
+                      example: 783
+                    - field: name
+                      description: パンくず名
+                      example: J-POP等
+                - field: campaign
+                  description: キャンペーン情報 (オブジェクトのリスト)
+                  children: # Structure of each campaign object
+                    - field: date_begin
+                      description: キャンペーン開始日時
+                      example: 2023-05-01 10:00:00
+                    - field: date_end
+                      description: キャンペーン終了日時
+                      example: 2023-05-31 23:59:59
+                    - field: title
+                      description: キャンペーンタイトル
+                      example: null
+    - name: フロアAPI
+      description: null # No description provided in the text for this API specifically
+      request_url: null # Not specified, assumed to be a base URL + endpoint
+      request_parameters:
+        - logical_name: APIID
+          physical_name: api_id
+          required: true
+          sample_value: null
+          description: 登録時に割り振られたID
+        - logical_name: アフィリエイトID
+          physical_name: affiliate_id
+          required: true
+          sample_value: affiliate-990
+          description: 登録時に割り振られた990～999までのアフィリエイトID
+        - logical_name: 出力形式
+          physical_name: output
+          required: false
+          sample_value: json
+          description: json / xml
+        - logical_name: コールバック
+          physical_name: callback
+          required: false
+          sample_value: callback
+          description: 出力形式jsonで指定した場合に、このパラメータでコールバック関数名を指定すると、JSONP形式で出力されます
+      response_fields:
+        - field: request
+          description: null
+          example: null
+          children:
+            - field: parameters
+              description: null
+              example: null
+              children: # This is a list of parameter objects
+                - field: parameter
+                  description: リクエストパラメータ (リスト)
+                  children: # Structure of each parameter object in the list
+                    - field: name
+                      description: パラメータ名
+                      example: affiliate_id
+                    - field: value
+                      description: 値
+                      example: affiliate-990
+        - field: result
+          description: null
+          example: null
+          children:
+            - field: site
+              description: サイト情報 (リスト)
+              children: # Structure of each site object in the list
+                - field: name
+                  description: サイト名
+                  example: DMM.com（一般）
+                - field: code
+                  description: サイトコード
+                  example: DMM.com
+                - field: service
+                  description: サービス情報 (リスト)
+                  children: # Structure of each service object in the list
+                    - field: name
+                      description: サービス名
+                      example: 動画
+                    - field: code
+                      description: サービスコード
+                      example: digital
+                    - field: floor
+                      description: フロア情報 (リスト)
+                      children: # Structure of each floor object in the list
+                        - field: id
+                          description: フロアID
+                          example: 6
+                        - field: name
+                          description: フロア名
+                          example: 映画・ドラマ
+                        - field: code
+                          description: フロアコード
+                          example: cinema
+    - name: 女優検索API
+      description: null
+      request_url: null
+      request_parameters:
+        - logical_name: APIID
+          physical_name: api_id
+          required: true
+          sample_value: null
+          description: 登録時に割り振られたID
+        - logical_name: アフィリエイトID
+          physical_name: affiliate_id
+          required: true
+          sample_value: affiliate-990
+          description: 登録時に割り振られた990～999までのアフィリエイトID
+        - logical_name: 頭文字(50音)
+          physical_name: initial
+          required: false
+          sample_value: あ
+          description: 50音をUTF-8で指定
+        - logical_name: 女優ID
+          physical_name: actress_id
+          required: false
+          sample_value: 15365
+          description: 女優ID
+        - logical_name: キーワード
+          physical_name: keyword
+          required: false
+          sample_value: あさみ
+          description: UTF-8で指定
+        - logical_name: バスト
+          physical_name: gte_bust / lte_bust
+          required: false
+          sample_value: 90
+          description: |
+            gte_bust=90ならバスト90cm以上、
+            lte_bust=90ならバスト90cm以下
+            gte_bust=90<e_bust=100なら
+            バスト90cm以上～100cm以下
+        - logical_name: ウエスト
+          physical_name: gte_waist / lte_waist
+          required: false
+          sample_value: 60
+          description: 同上 (バストと同様のgte/lte形式)
+        - logical_name: ヒップ
+          physical_name: gte_hip / lte_hip
+          required: false
+          sample_value: 90
+          description: 同上 (バストと同様のgte/lte形式)
+        - logical_name: 身長
+          physical_name: gte_height / lte_height
+          required: false
+          sample_value: 160
+          description: 同上 (バストと同様のgte/lte形式)
+        - logical_name: 生年月日
+          physical_name: gte_birthday / lte_birthday
+          required: false
+          sample_value: 1990-01-01
+          description: |
+            yyyymmddの形式で指定 (ドキュメントでは yyyy-mm-dd の例だが、指示はyyyymmdd)
+            gte_birthday=1990-01-01なら1990年1月1日以降生まれ
+            lte_birthday=1990-01-01なら1990年1月1日以前生まれ
+            gte_birthday=1980-01-01<e_birthday=1989-12-31なら
+            1980年1月1日生まれ～1989年12月31日生まれ
+        - logical_name: 取得件数
+          physical_name: hits
+          required: false
+          sample_value: 20
+          description: 初期値：20　最大：100
+        - logical_name: 検索開始位置
+          physical_name: offset
+          required: false
+          sample_value: 1
+          description: 初期値：1
+        - logical_name: ソート順
+          physical_name: sort
+          required: false
+          sample_value: -name
+          description: |
+            名前昇順：name
+            名前降順：-name
+            バスト昇順：bust
+            バスト降順：-bust
+            ウエスト昇順：waist
+            ウエスト降順：-waist
+            ヒップ昇順：hip
+            ヒップ降順：-hip
+            身長昇順：height
+            身長降順：-height
+            生年月日昇順：birthday
+            生年月日降順：-birthday
+            女優ID昇順：id
+            女優ID降順：-id
+        - logical_name: 出力形式
+          physical_name: output
+          required: false
+          sample_value: json
+          description: json / xml
+        - logical_name: コールバック
+          physical_name: callback
+          required: false
+          sample_value: callback
+          description: 出力形式jsonで指定した場合に、このパラメータでコールバック関数名を指定すると、JSONP形式で出力されます
+      response_fields:
+        - field: request
+          description: null
+          example: null
+          children:
+            - field: parameters
+              description: null
+              example: null
+              children: # This is a list of parameter objects
+                - field: parameter
+                  description: リクエストパラメータ (リスト)
+                  children: # Structure of each parameter object in the list
+                    - field: name
+                      description: パラメータ名
+                      example: keyword
+                    - field: value
+                      description: 値
+                      example: あさみ
+        - field: result
+          description: null
+          example: null
+          children:
+            - field: status
+              description: ステータスコード
+              example: 200
+            - field: result_count
+              description: 取得件数
+              example: 20
+            - field: total_count
+              description: 全体件数
+              example: 64964
+            - field: first_position
+              description: 検索開始位置
+              example: 1
+            - field: actress
+              description: 女優情報 (リスト)
+              children: # Structure of each actress object in the list
+                - field: id
+                  description: 女優ID
+                  example: 15365
+                - field: name
+                  description: 女優名
+                  example: 麻美ゆま
+                - field: ruby
+                  description: 女優名（読み仮名）
+                  example: あさみゆま
+                - field: bust
+                  description: バスト
+                  example: 96
+                - field: cup
+                  description: カップ数
+                  example: H
+                - field: waist
+                  description: ウェスト
+                  example: 58
+                - field: hip
+                  description: ヒップ
+                  example: 88
+                - field: height
+                  description: 身長
+                  example: 158
+                - field: birthday
+                  description: 生年月日
+                  example: 1987-03-24
+                - field: blood_type
+                  description: 血液型
+                  example: AB
+                - field: hobby
+                  description: 趣味
+                  example: 香水集め、英会話、ピアノ
+                - field: prefectures
+                  description: 出身地
+                  example: 東京都
+                - field: imageURL
+                  description: 画像URL
+                  children:
+                    - field: small
+                      description: 画像（小）
+                      example: http://pics.dmm.co.jp/mono/actjpgs/thumbnail/asami_yuma.jpg
+                    - field: large
+                      description: 画像（大）
+                      example: http://pics.dmm.co.jp/mono/actjpgs/asami_yuma.jpg
+                - field: listURL
+                  description: リストページURL(アフィリエイトID付き)
+                  children:
+                    - field: digital
+                      description: 動画
+                      example: https://al.dmm.co.jp/?lurl=http%3A%2F%2Fwww.dmm.co.jp%2Fdigital%2Fvideoa%2F-%2Flist%2F%3D%2Farticle%3Dactress%2Fid%3D15365%2F&af_id=affiliate-001&ch=api
+                    - field: monthly_premium
+                      description: 月額動画 見放題chデラックス
+                      example: https://al.dmm.co.jp/?lurl=http%3A%2F%2Fwww.dmm.co.jp%2Fmonthly%2Fpremium%2F-%2Flist%2F%3D%2Farticle%3Dactress%2Fid%3D15365%2F&af_id=affiliate-001&ch=api
+                    - field: mono
+                      description: DVD通販
+                      example: https://al.dmm.co.jp/?lurl=http%3A%2F%2Fwww.dmm.co.jp%2Fmono%2Fdvd%2F-%2Flist%2F%3D%2Farticle%3Dactress%2Fid%3D15365%2F&af_id=affiliate-001&ch=api
+    - name: ジャンルAPI
+      description: null
+      request_url: null
+      request_parameters:
+        - logical_name: APIID
+          physical_name: api_id
+          required: true
+          sample_value: null
+          description: 登録時に割り振られたID
+        - logical_name: アフィリエイトID
+          physical_name: affiliate_id
+          required: true
+          sample_value: affiliate-990
+          description: 登録時に割り振られた990～999までのアフィリエイトID
+        - logical_name: フロアID
+          physical_name: floor_id
+          required: true
+          sample_value: null # Example "40" in response, but not in request params sample
+          description: フロア検索APIから取得可能なフロアID
+        - logical_name: 頭文字(50音)
+          physical_name: initial
+          required: false
+          sample_value: あ
+          description: 50音をUTF-8で指定
+        - logical_name: 取得件数
+          physical_name: hits
+          required: false
+          sample_value: 100
+          description: 初期値：100　最大：500
+        - logical_name: 検索開始位置
+          physical_name: offset
+          required: false
+          sample_value: 1
+          description: 初期値：1
+        - logical_name: 出力形式
+          physical_name: output
+          required: false
+          sample_value: json
+          description: json / xml
+        - logical_name: コールバック
+          physical_name: callback
+          required: false
+          sample_value: callback
+          description: 出力形式jsonで指定した場合に、このパラメータでコールバック関数名を指定すると、JSONP形式で出力されます
+      response_fields:
+        - field: request
+          description: null
+          example: null
+          children:
+            - field: parameters
+              description: null
+              example: null
+              children: # This is a list of parameter objects
+                - field: parameter
+                  description: リクエストパラメータ (リスト)
+                  children: # Structure of each parameter object in the list
+                    - field: name
+                      description: パラメータ名
+                      example: affiliate_id
+                    - field: value
+                      description: 値
+                      example: affiliate-990
+        - field: result
+          description: null
+          example: null
+          children:
+            - field: status
+              description: ステータスコード
+              example: 200
+            - field: result_count
+              description: 取得件数
+              example: 100
+            - field: total_count
+              description: 全体件数
+              example: 1000
+            - field: first_position
+              description: 検索開始位置
+              example: 1
+            - field: site_name
+              description: サイト名
+              example: FANZA（アダルト）
+            - field: site_code
+              description: サイトコード
+              example: FANZA
+            - field: service_name
+              description: サービス名
+              example: 動画
+            - field: service_code
+              description: サービスコード
+              example: digital
+            - field: floor_id
+              description: フロアID
+              example: 40
+            - field: floor_name
+              description: フロア名
+              example: ビデオ
+            - field: floor_code
+              description: フロアコード
+              example: videoa
+            - field: genre
+              description: ジャンル情報 (リスト)
+              children: # Structure of each genre object in the list
+                - field: genre_id
+                  description: ジャンルID
+                  example: 2001
+                - field: name
+                  description: ジャンル名
+                  example: 巨乳
+                - field: ruby
+                  description: ジャンル名(読み仮名)
+                  example: きょにゅう
+                - field: list_url
+                  description: リストページURL（アフィリエイトID付き）
+                  example: https://al.dmm.co.jp/?lurl=http%3A%2F%2Fwww.dmm.co.jp%2Fdigital%2Fvideoa%2F-%2Flist%2F%3D%2Farticle%3Dkeyword%2Fid%3D2001%2F&af_id=affiliate-001&ch=api
+    - name: メーカー検索API
+      description: null
+      request_url: null
+      request_parameters:
+        - logical_name: APIID
+          physical_name: api_id
+          required: true
+          sample_value: null
+          description: 登録時に割り振られたID
+        - logical_name: アフィリエイトID
+          physical_name: affiliate_id
+          required: true
+          sample_value: affiliate-990
+          description: 登録時に割り振られた990～999までのアフィリエイトID
+        - logical_name: フロアID
+          physical_name: floor_id
+          required: true
+          sample_value: null # Example "40" in response, but not in request params sample
+          description: フロア検索APIから取得可能なフロアID
+        - logical_name: 頭文字(50音)
+          physical_name: initial
+          required: false
+          sample_value: あ
+          description: 50音をUTF-8で指定
+        - logical_name: 取得件数
+          physical_name: hits
+          required: false
+          sample_value: 100
+          description: 初期値：100　最大：500
+        - logical_name: 検索開始位置
+          physical_name: offset
+          required: false
+          sample_value: 1
+          description: 初期値：1
+        - logical_name: 出力形式
+          physical_name: output
+          required: false
+          sample_value: json
+          description: json / xml
+        - logical_name: コールバック
+          physical_name: callback
+          required: false
+          sample_value: callback
+          description: 出力形式jsonで指定した場合に、このパラメータでコールバック関数名を指定すると、JSONP形式で出力されます
+      response_fields:
+        - field: request
+          description: null
+          example: null
+          children:
+            - field: parameters
+              description: null
+              example: null
+              children: # This is a list of parameter objects
+                - field: parameter
+                  description: リクエストパラメータ (リスト)
+                  children: # Structure of each parameter object in the list
+                    - field: name
+                      description: パラメータ名
+                      example: affiliate_id
+                    - field: value
+                      description: 値
+                      example: affiliate-990
+        - field: result
+          description: null
+          example: null
+          children:
+            - field: status
+              description: ステータスコード
+              example: 200
+            - field: result_count
+              description: 取得件数
+              example: 100
+            - field: total_count
+              description: 全体件数
+              example: 1000
+            - field: first_position
+              description: 検索開始位置
+              example: 1
+            - field: site_name
+              description: サイト名
+              example: FANZA（アダルト）
+            - field: site_code
+              description: サイトコード
+              example: FANZA
+            - field: service_name
+              description: サービス名
+              example: 動画
+            - field: service_code
+              description: サービスコード
+              example: digital
+            - field: floor_id
+              description: フロアID
+              example: 40
+            - field: floor_name
+              description: フロア名
+              example: ビデオ
+            - field: floor_code
+              description: フロアコード
+              example: videoa
+            - field: maker
+              description: メーカー情報 (リスト)
+              children: # Structure of each maker object in the list
+                - field: maker_id
+                  description: メーカーID
+                  example: 1509
+                - field: name
+                  description: メーカー名
+                  example: ムーディーズ
+                - field: ruby
+                  description: メーカー名(読み仮名)
+                  example: むーでぃーず
+                - field: list_url
+                  description: リストページURL（アフィリエイトID付き）
+                  example: https://al.dmm.co.jp/?lurl=http%3A%2F%2Fwww.dmm.co.jp%2Fdigital%2Fvideoa%2F-%2Flist%2F%3D%2Farticle%3Dmaker%2Fid%3D1509%2F&af_id=affiliate-990&ch=api
+    - name: シリーズ検索API # "シリーズ検索"
+      description: null
+      request_url: null
+      request_parameters:
+        - logical_name: APIID
+          physical_name: api_id
+          required: true
+          sample_value: null
+          description: 登録時に割り振られたID
+        - logical_name: アフィリエイトID
+          physical_name: affiliate_id
+          required: true
+          sample_value: affiliate-990
+          description: 登録時に割り振られた990～999までのアフィリエイトID
+        - logical_name: フロアID
+          physical_name: floor_id
+          required: true
+          sample_value: null # Example "24" in response, but not in request params sample
+          description: フロア検索APIから取得可能なフロアID
+        - logical_name: 頭文字(50音)
+          physical_name: initial
+          required: false
+          sample_value: あ
+          description: 50音をUTF-8で指定
+        - logical_name: 取得件数
+          physical_name: hits
+          required: false
+          sample_value: 100
+          description: 初期値：100　最大：500
+        - logical_name: 検索開始位置
+          physical_name: offset
+          required: false
+          sample_value: 1
+          description: 初期値：1
+        - logical_name: 出力形式
+          physical_name: output
+          required: false
+          sample_value: json
+          description: json / xml
+        - logical_name: コールバック
+          physical_name: callback
+          required: false
+          sample_value: callback
+          description: 出力形式jsonで指定した場合に、このパラメータでコールバック関数名を指定すると、JSONP形式で出力されます
+      response_fields:
+        - field: request
+          description: null
+          example: null
+          children:
+            - field: parameters
+              description: null
+              example: null
+              children: # This is a list of parameter objects
+                - field: parameter
+                  description: リクエストパラメータ (リスト)
+                  children: # Structure of each parameter object in the list
+                    - field: name
+                      description: パラメータ名
+                      example: affiliate_id
+                    - field: value
+                      description: 値
+                      example: affiliate-990
+        - field: result
+          description: null
+          example: null
+          children:
+            - field: status
+              description: ステータスコード
+              example: 200
+            - field: result_count
+              description: 取得件数
+              example: 100
+            - field: total_count
+              description: 全体件数
+              example: 1000
+            - field: first_position
+              description: 検索開始位置
+              example: 1
+            - field: site_name
+              description: サイト名
+              example: DMM.com（一般）
+            - field: site_code
+              description: サイトコード
+              example: DMM.com
+            - field: service_name
+              description: サービス名
+              example: 通販
+            - field: service_code
+              description: サービスコード
+              example: mono
+            - field: floor_id
+              description: フロアID
+              example: 24
+            - field: floor_name
+              description: フロア名
+              example: 本・コミック
+            - field: floor_code
+              description: フロアコード
+              example: book
+            - field: series
+              description: シリーズ情報 (リスト)
+              children: # Structure of each series object in the list
+                - field: series_id
+                  description: シリーズID
+                  example: 62226
+                - field: name
+                  description: シリーズ名
+                  example: ARIA
+                - field: ruby
+                  description: シリーズ名(読み仮名)
+                  example: ありあ
+                - field: list_url
+                  description: リストページURL（アフィリエイトID付き）
+                  example: https://al.dmm.com/?lurl=http%3A%2F%2Fwww.dmm.com%2Fmono%2Fbook%2F-%2Flist%2F%3D%2Farticle%3Dseries%2Fid%3D62226%2F&af_id=affiliate-001&ch=api
+    - name: 作者検索API
+      description: null
+      request_url: null
+      request_parameters:
+        - logical_name: APIID
+          physical_name: api_id
+          required: true
+          sample_value: null
+          description: 登録時に割り振られたID
+        - logical_name: アフィリエイトID
+          physical_name: affiliate_id
+          required: true
+          sample_value: affiliate-990
+          description: 登録時に割り振られた990～999までのアフィリエイトID
+        - logical_name: フロアID
+          physical_name: floor_id
+          required: true
+          sample_value: null # Example "24" in response, but not in request params sample
+          description: フロア検索APIから取得可能なフロアID
+        - logical_name: 読み仮名 # "頭文字(50音)" ではなく "読み仮名"
+          physical_name: initial # 物理名は "initial" のまま
+          required: false
+          sample_value: う゛ぃくとる
+          description: 作者名(読み仮名)をUTF-8で指定、前方一致検索します。
+        - logical_name: 取得件数
+          physical_name: hits
+          required: false
+          sample_value: 100
+          description: 初期値：100　最大：500
+        - logical_name: 検索開始位置
+          physical_name: offset
+          required: false
+          sample_value: 1
+          description: 初期値：1
+        - logical_name: 出力形式
+          physical_name: output
+          required: false
+          sample_value: json
+          description: json / xml
+        - logical_name: コールバック
+          physical_name: callback
+          required: false
+          sample_value: callback
+          description: 出力形式jsonで指定した場合に、このパラメータでコールバック関数名を指定すると、JSONP形式で出力されます
+      response_fields:
+        - field: request
+          description: null
+          example: null
+          children:
+            - field: parameters
+              description: null
+              example: null
+              children: # This is a list of parameter objects
+                - field: parameter
+                  description: リクエストパラメータ (リスト)
+                  children: # Structure of each parameter object in the list
+                    - field: name
+                      description: パラメータ名
+                      example: affiliate_id
+                    - field: value
+                      description: 値
+                      example: affiliate-990
+        - field: result
+          description: null
+          example: null
+          children:
+            - field: status
+              description: ステータスコード
+              example: 200
+            - field: result_count
+              description: 取得件数
+              example: 100
+            - field: total_count
+              description: 全体件数
+              example: 1000
+            - field: first_position
+              description: 検索開始位置
+              example: 1
+            - field: site_name
+              description: サイト名
+              example: DMM.com（一般）
+            - field: site_code
+              description: サイトコード
+              example: DMM.com
+            - field: service_name
+              description: サービス名
+              example: 通販
+            - field: service_code
+              description: サービスコード
+              example: mono
+            - field: floor_id
+              description: フロアID
+              example: 24
+            - field: floor_name
+              description: フロア名
+              example: 本・コミック
+            - field: floor_code
+              description: フロアコード
+              example: book
+            - field: author
+              description: 作者情報 (リスト)
+              children: # Structure of each author object in the list
+                - field: author_id
+                  description: 作者ID
+                  example: 21414
+                - field: name
+                  description: 作者名
+                  example: ヴィクトル・ユゴー
+                - field: ruby
+                  description: 作者名(読み仮名)
+                  example: う゛ぃくとるゆごー
+                - field: another_name
+                  description: 作者別名
+                  example: ヴィクトル・ユーゴー/ヴィクトル=ユーゴー
+                - field: list_url
+                  description: リストページURL（アフィリエイトID付き）
+                  example: https://al.dmm.com/?lurl=http%3A%2F%2Fwww.dmm.com%2Fmono%2Fbook%2F-%2Flist%2F%3D%2Farticle%3Dauthor%2Fid%3D21414%2F&af_id=affiliate-990&ch=api

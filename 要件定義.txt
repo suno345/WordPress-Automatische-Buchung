@@ -1,0 +1,668 @@
+# Cursorへのコーディング依頼プロンプト: FANZAコンテンツ自動投稿プログラム
+
+# ------------------------------------------------------------------------------
+# プロジェクト概要とCursorへの指示
+# ------------------------------------------------------------------------------
+project_information:
+  project_name: FANZA_Content_AutoBlogger_for_WordPress
+  goal: >
+    FANZAの特定キーワード検索結果から商品情報を取得し、記事テンプレートに基づいて
+    WordPress (SWELLテーマ使用) に自動で予約投稿するPythonプログラムを開発する。
+    1日1回の実行で、24時間分の記事を予約投稿する状態を目指す。
+
+
+instructions_for_cursor:
+  - >
+    このYAMLファイルに記載された要件定義に基づき、Pythonプログラムを開発してください。
+  - >
+    以下の各セクション、特に `user_clarifications_required` に記載された質問事項について、
+    開発を進める前にユーザー（あなた）に確認し、回答を得てください。
+  - >
+    得られた回答を元に、詳細設計とコーディングを進めてください。
+  - >
+    設定値 (APIキー、シートID、WordPress URLなど) は `.env` ファイルから読み込むように実装してください。
+  - >
+    エラーハンドリングの基本方針は「エラーログを記録し、該当商品の処理をスキップして次の処理へ進む」です。
+  - >
+    各機能はモジュール化し、テスト容易性・保守性を高めてください。
+  - >
+    不明点や、この指示書に記載されていないが設計上必要となる判断が生じた場合は、
+    適宜ユーザーに質問してください。
+
+# ------------------------------------------------------------------------------
+# 技術要件
+# ------------------------------------------------------------------------------
+technical_requirements:
+  programming_language: Python 3.x
+  libraries_and_tools:
+    - aiohttp (非同期HTTP通信用)
+    - requests (HTTP通信用)
+    - google-api-python-client, google-auth-oauthlib, google-auth-httplib2 (Googleスプレッドシート連携)
+    - python-dotenv (.envファイル読み込み)
+    - Pillow (画像処理)
+    - asyncio (非同期処理)
+    - unittest (テストフレームワーク)
+    - pytest (テストフレームワーク、オプション)
+  environment_configuration:
+    - APIキー、認証情報、スプレッドシートID、WordPressサイトURL等は `.env` ファイルで管理する。
+    - `.env.example` ファイルも作成し、必要な設定項目を記載すること。
+    - キャッシュディレクトリの設定も環境変数で管理する。
+
+# ------------------------------------------------------------------------------
+# FANZA API仕様
+# ------------------------------------------------------------------------------
+fanza_api_specifications:
+  api_version: "DMM Affiliate API v3"
+  base_url: "https://api.dmm.com/affiliate/v3"
+  authentication:
+    - type: "API Key"
+    - parameter: "api_id"
+    - parameter: "affiliate_id"
+  rate_limits:
+    - requests_per_second: 1
+    - daily_requests: 1000
+  cache_settings:
+    - default_expiry: 3600  # 1時間
+    - product_info_expiry: 86400  # 24時間
+    - search_results_expiry: 1800  # 30分
+
+  available_endpoints:
+    - name: "ItemList"
+      description: "商品一覧の取得"
+      parameters:
+        - site: "FANZA"
+        - service: "digital"
+        - floor: "doujin"
+        - hits: "取得件数（最大100）"
+        - offset: "取得開始位置"
+        - keyword: "検索キーワード"
+        - sort: "ソート順（rank, date, price）"
+    - name: "Item"
+      description: "商品詳細の取得"
+      parameters:
+        - site: "FANZA"
+        - service: "digital"
+        - floor: "doujin"
+        - article: "商品ID"
+
+  response_fields:
+    basic_info:
+      - product_id: "商品ID"
+      - content_id: "コンテンツID"
+      - title: "商品タイトル"
+      - URL: "商品ページのURL"
+      - affiliateURL: "アフィリエイトURL"
+      - date: "発売日、配信開始日"
+      - service_name: "サービス名"
+      - floor_name: "フロア名"
+
+    media:
+      images:
+        - list: "リスト表示用の小さい画像"
+        - small: "商品ページ用の小さい画像"
+        - large: "商品ページ用の大きい画像"
+      sample_images:
+        - sample_s: "小さいサンプル画像群"
+        - sample_l: "大きいサンプル画像群"
+      sample_movies:
+        - size_476_306: "476x306サイズのサンプル動画"
+        - size_560_360: "560x360サイズのサンプル動画"
+
+    pricing:
+      - price: "販売価格（税込）"
+      - list_price: "定価（税込）"
+      - deliveries: "配信形式ごとの価格情報"
+
+    attributes:
+      - genre: "ジャンル（複数）"
+      - series: "シリーズ（複数）"
+      - maker: "メーカー（複数）"
+      - actor: "出演者（複数）"
+      - author: "作者（複数）"
+      - director: "監督（複数）"
+      - label: "レーベル（複数）"
+      - runtime: "再生時間（動画の場合）"
+      - caption: "巻数など（電子書籍の場合）"
+
+    reviews:
+      - count: "レビュー数"
+      - average: "平均評価点"
+
+    inventory:
+      - stock: "在庫状況"
+      - volume: "巻数表記や容量"
+
+  unavailable_info:
+    - 詳細な商品説明文・キャッチコピー
+    - ユーザーレビューの本文
+    - ユーザーコメント・掲示板の内容
+    - サイト独自のランキング情報
+    - 関連商品・おすすめ商品の詳細なリスト
+    - キャンペーン情報・セール情報の詳細
+    - サイト独自のUI要素・ページレイアウト情報
+    - 非常にニッチな属性情報やタグ
+
+  implementation_notes:
+    - APIファースト: 可能な限りAPIを利用し、スクレイピングは避ける
+    - キャッシュ活用: 適切なキャッシュ戦略でAPIリクエストを最適化
+    - エラーハンドリング: API制限やエラーに対する適切な処理
+    - レート制限: APIの利用制限を遵守
+    - データ更新: キャッシュの有効期限を考慮した更新戦略
+
+# ------------------------------------------------------------------------------
+# ユーザーへの確認事項（更新）
+# ------------------------------------------------------------------------------
+user_clarifications_required:
+  section_B_Grok_LLM_Integration:
+    B1_Face_Trimming_Image_Selection:
+      - question: "FANZA商品ページに複数のサンプル画像がある場合、どの画像を顔トリミングの対象としますか？"
+    B2_Grok_Input_Text:
+      - question: "Grokへのテンプレートプロンプトに含めるテキスト情報は、具体的にFANZAのどの情報を利用しますか？"
+    B3_Grok_API_Specification:
+      - question: "Grok APIの具体的な利用方法（APIキーの取得方法、エンドポイント、認証方法など）について、xAIの公式情報をご確認いただけますか？"
+
+# ------------------------------------------------------------------------------
+# データ取得戦略（更新）
+# ------------------------------------------------------------------------------
+data_retrieval_strategy:
+  api_first_approach:
+    - description: "FANZA APIを第一選択として使用"
+    - available_data:
+      - 基本情報（商品ID、タイトル、URL等）
+      - メディア情報（画像URL、動画URL）
+      - 価格情報
+      - 属性情報（ジャンル、シリーズ等）
+      - レビュー情報（件数、平均評価）
+      - 在庫情報
+    - limitations:
+      - 詳細な商品説明文
+      - キャッチコピー
+      - ユーザーレビュー本文
+      - その他のAPIで取得できない情報
+
+  scraping_fallback:
+    - description: "APIで取得できない情報はスクレイピングで補完"
+    - target_data:
+      - 商品詳細ページの完全な説明文
+      - キャッチコピー
+      - ユーザーレビュー本文
+      - その他のAPIで取得できない情報
+    - implementation:
+      - スクレイピングはAPI取得後に実行
+      - エラー発生時は適切なエラーハンドリング
+      - レート制限に配慮した実装
+
+# ------------------------------------------------------------------------------
+# スプレッドシート管理（更新）
+# ------------------------------------------------------------------------------
+spreadsheet_management:
+  sheets:
+    - name: キーワード管理シート
+      purpose: "検索キーワードとその処理状態の管理（品番は管理しない）"
+      columns:
+        - name: 処理フラグ
+          type: チェックボックス
+          description: "このキーワードを処理対象とするか"
+        - name: キャラクター名
+          type: テキスト
+          description: "WordPressのカスタムタクソノミー用"
+        - name: FANZA検索キーワード
+          type: テキスト
+          description: "FANZA API検索用"
+        - name: 最終処理日時
+          type: 日時
+          description: "最後に処理した日時"
+        - name: 最終処理結果
+          type: テキスト
+          description: "処理結果（成功/失敗/エラー内容）"
+        - name: 備考
+          type: テキスト
+          description: "手動メモ用"
+      notes: |
+        - 品番（商品ID）は管理しない。
+        - 検索キーワードから商品情報を取得し、商品管理シートに追加する。
+        - 「処理フラグON」かつ「FANZA検索キーワード」指定行について、FANZA APIまたはスクレイピングで商品URLを自動取得し、商品管理シートに未登録なら自動追加する。
+
+    - name: 商品管理シート
+      purpose: "商品URLと投稿状態の管理（品番照合・重複管理・投稿対象管理はここだけで行う）"
+      columns:
+        - name: 商品URL
+          type: テキスト
+          description: "FANZAの商品ページ品番（d_xxxxx など）を記載。URLは記載しない。"
+        - name: 商品名
+          type: テキスト
+          description: "API/スクレイピングで取得した商品名"
+        - name: サークル名
+          type: テキスト
+          description: "商品のサークル名"
+        - name: 投稿ステータス
+          type: ドロップダウン
+          description: "未処理、予約済み、投稿完了、エラー"
+        - name: 予約投稿日時
+          type: 日時
+          description: "WordPressに予約投稿する日時"
+        - name: 投稿済み記事URL
+          type: テキスト
+          description: "WordPressに投稿された記事のID（数値のみ）を記載。URLは記載しない。"
+        - name: 最終処理日時
+          type: 日時
+          description: "この商品に対する最終処理日時"
+        - name: エラー詳細
+          type: テキスト
+          description: "エラーが発生した場合の詳細情報"
+      notes: |
+        - 商品URL（品番）を一意キーとし、重複・投稿対象・品番照合はこのシートのみで管理する。
+        - D列には品番（d_xxxxx など）のみを記載し、URLは記載しない。
+        - 投稿処理は「未処理」行のみを対象とする。
+        - WordPress投稿成功時はG列に記事ID（数値）のみを記載し、URLは記載しない。
+        - キーワード管理シートから自動追加された商品は「未処理」ステータスで管理する。
+
+  duplicate_handling:
+    - rule: "商品URLを一意のキーとして使用"
+    - strategy:
+      - 新規商品URL: 新規行として追加
+      - 既存商品URL: スキップ（重複投稿防止）
+    - implementation:
+      - 商品URLでの重複チェックを実施
+      - 重複検出時は処理をスキップ
+      - 重複チェック結果をログに記録
+
+# ------------------------------------------------------------------------------
+# 主要モジュール仕様（更新）
+# ------------------------------------------------------------------------------
+module_specifications:
+  - module_name: FANZA_Data_Retriever
+    description: FANZAからの情報取得（APIおよびスクレイピング）を担当する。
+    functions:
+      - name: get_product_info
+        description: 商品IDに基づいて商品情報を取得する（キャッシュ優先）。
+        inputs: 商品ID
+        outputs: 商品情報の辞書
+        notes: |
+          キャッシュの有効期限は設定可能（デフォルト1時間）。
+          レート制限の管理機能あり。
+      - name: get_latest_products
+        description: 最新の商品情報を取得する。
+        inputs: 取得件数
+        outputs: 商品情報のリスト
+        notes: 取得した商品情報は自動的にキャッシュされる。
+    api_capabilities:
+      basic_info:
+        - product_id: 商品ID
+        - content_id: コンテンツID (動画などでproduct_idと異なる場合がある)
+        - title: 商品タイトル
+        - URL: 商品ページのURL
+        - affiliateURL: アフィリエイトURL
+        - date: 発売日、配信開始日など
+        - service_name: サービス名 (例: "動画")
+        - floor_name: フロア名 (例: "アダルト動画")
+      media:
+        images:
+          - list: リスト表示用の小さい画像
+          - small: 商品ページ用の小さい画像
+          - large: 商品ページ用の大きい画像
+        sample_images:
+          - sample_s: 小さいサンプル画像群
+          - sample_l: 大きいサンプル画像群
+        sample_movies:
+          - size_476_306: 476x306サイズのサンプル動画
+          - size_560_360: 560x360サイズのサンプル動画
+      pricing:
+        - price: 販売価格（税込）
+        - list_price: 定価（税込）
+        - deliveries: 配信形式ごとの価格情報
+      attributes:
+        - genre: ジャンル (複数)
+        - series: シリーズ (複数)
+        - maker: メーカー (複数)
+        - actor: 出演者 (複数)
+        - author: 作者 (複数)
+        - director: 監督 (複数)
+        - label: レーベル (複数)
+        - runtime: 再生時間 (動画の場合)
+        - caption: 巻数など (電子書籍の場合)
+      reviews:
+        - count: レビュー数
+        - average: 平均評価点
+      inventory:
+        - stock: 在庫状況 (例: "通常出荷", "在庫切れ", "予約受付中")
+        - volume: 巻数表記や容量 (電子書籍の場合)
+    api_limitations:
+      unavailable_info:
+        - 詳細な商品説明文・キャッチコピー
+        - ユーザーレビューの本文
+        - ユーザーコメント・掲示板の内容
+        - サイト独自のランキング情報
+        - 関連商品・おすすめ商品の詳細なリスト
+        - キャンペーン情報・セール情報の詳細
+        - サイト独自のUI要素・ページレイアウト情報
+        - 非常にニッチな属性情報やタグ
+      considerations:
+        - レート制限の遵守
+        - キャッシュの適切な管理
+        - スクレイピングの不使用
+        - データ更新のタイムラグへの対応
+
+  - module_name: Grok_Analyzer
+    description: X社のLLM (Grok) と連携し、原作名・キャラ名を推測する。
+    functions:
+      - name: get_anime_face_image_data
+        description: >
+          FANZA商品ページから取得したサンプル画像URLを元に画像をダウンロードし、
+          Pythonの指定ライブラリ/ロジック (ユーザー指定) を用いて顔部分をトリミングし、
+          Grok APIにアップロード可能な画像データ形式に変換する。
+        inputs: サンプル画像URL (1枚)
+        outputs: 顔画像データ (Grok APIの仕様に合わせた形式)
+      - name: infer_origin_and_character
+        description: >
+          トリミングした顔画像データ、商品タイトル、商品説明文の一部などをテンプレートプロンプトと共に
+          Grok APIに送信し、推測された原作名・キャラ名を取得する。
+        inputs: 顔画像データ, 商品タイトル, 商品説明文の一部など, テンプレートプロンプト
+        outputs: 推測された原作名, 推測されたキャラ名 (辞書形式など)
+        notes: Grok APIキーは.envから読み込む。API仕様（エンドポイント、認証、リクエスト/レスポンス形式）はユーザーからの情報を元に実装。
+
+  - module_name: WordPress_Article_Generator
+    description: 取得・推測した情報を元に、WordPress投稿用の記事コンテンツ（タイトル、本文、カテゴリー、タグ等）を生成する。SWELLテーマの利用を前提とした記事構成を考慮する。
+    functions:
+      - name: generate_article_content
+        description: 収集した全情報（商品情報、Grok推測結果、ユーザー定義テンプレート等）を元に記事を構成する。
+        inputs: 商品データ一式 (API取得情報, スクレイピング情報, Grok推測結果)
+        outputs: 記事タイトル, 本文HTML, カテゴリーリスト, タグリスト, アイキャッチ画像URL, カスタムタクソノミー情報
+        template_specification:
+          basic_policy:
+            - mobile_first: "スマートフォンでの閲覧体験を最優先"
+            - user_experience: "必要な情報を素早く得られ、スムーズにアフィリエイトリンクへ誘導"
+            - site_engagement: "サイト内回遊を促進し、滞在時間とPV数向上"
+            - no_reviews: "レビューサイトにはしない（主観的な評価やレビュー要素は含めない）"
+
+          taxonomy_usage:
+            category:
+              definition: "FANZAの公式ジャンルをそのまま使用"
+              ng_words: ["新作", "準新作", "旧作"]
+              display: "記事メタ情報として表示（SWELL標準機能）"
+
+            custom_taxonomies:
+              original_work:
+                display: "作品情報テーブル内に表示し、アーカイブページへリンク"
+              character_name:
+                usage: "記事タイトルに使用"
+                display: "作品情報テーブル内に表示し、アーカイブページへリンク"
+              product_format:
+                display: "作品情報テーブル内に表示"
+              circle_name:
+                display: "作品情報テーブル内に表示し、アーカイブページへリンク"
+
+            standard_tags:
+              definition: "作者名（著者名）を登録"
+              display: "作品情報テーブル内に表示し、アーカイブページへリンク"
+
+          article_structure:
+            - order: 1
+              element: "swell_auto_h1_title"
+              format: "【商品名】【キャラ名】"
+              notes: "商品名とキャラ名を明確に表示"
+
+            - order: 2
+              element: "swell_eyecatch_image"
+              notes: "SWELL標準機能。記事一覧ページでのクリック率向上"
+
+            - order: 3
+              element: "paragraph_block"
+              type: "リード文"
+              content: "作品の概要や読者の興味を引く一言二言（2-3行程度）"
+
+            - order: 4
+              element: "table_block_or_list_block"
+              section: "作品情報"
+              items:
+                - circle_name: "サークル名（リンク付き）"
+                - author_name: "作者名（リンク付き）"
+                - original_work: "原作名（リンク付き）"
+                - character_name: "キャラ名（リンク付き）"
+                - product_format: "作品形式"
+                - page_count: "ページ数"
+
+            - order: 5
+              element: "image_block_sequence"
+              content: "サンプル画像（3～10枚）"
+              style: "縦に全て並べて表示"
+
+            - order: 6
+              element: "paragraph_block"
+              type: "ストーリー/紹介文"
+              content: "FANZA公式サイトの作品紹介文をベースにリライト（200～400字）"
+
+            - order: 7
+              element: "swell_button_block"
+              type: "アフィリエイトリンク"
+              text: "FANZAでこの作品をチェックする"
+              design: "FANZAのオレンジ系をアクセントカラー"
+
+            - order: 8
+              element: "group_block"
+              section: "無料で読める？"
+              content: "作品の有料性と試し読み可能性について説明"
+
+            - order: 9
+              element: "swell_related_posts"
+              criteria:
+                - "同一カテゴリー"
+                - "同一カスタムタクソノミー"
+                - "同一作者"
+              count: "4～8記事"
+
+          additional_requirements:
+            swell_settings:
+              - "メタ情報の表示/非表示設定"
+              - "パンくずリストの表示"
+            block_spacing:
+              - "適切なマージンとパディング"
+              - "スペーサーブロックの活用"
+            image_optimization:
+              - "遅延読み込み（Lazy Load）の有効化"
+              - "適切なサイズ最適化"
+            flexibility:
+              - "作品特性に応じた微調整可能"
+              - "画像点数や紹介文の長さの調整余地"
+
+  - module_name: WordPress_Poster
+    description: WordPressへの記事投稿を管理する。
+    functions:
+      - name: post_article
+        description: 記事を投稿する。
+        inputs: 記事データ（タイトル、本文、画像URL等）
+        outputs: 投稿された記事のID
+        notes: |
+          画像の最適化機能あり。
+          カテゴリーとタグの自動作成機能あり。
+          ギャラリー画像の添付機能あり。
+      - name: update_article_status
+        description: 記事のステータスを更新する。
+        inputs: 記事ID、新しいステータス
+        outputs: 更新の成功/失敗
+
+  - module_name: Scheduler_Orchestrator
+    description: 全体の処理フローを制御する。
+    functions:
+      - name: schedule_articles
+        description: 記事のスケジュール投稿を行う。
+        inputs: 商品IDのリスト
+        outputs: なし
+        notes: |
+          並列処理による効率化。
+          リトライ機能あり。
+          最適な投稿時間の自動計算。
+
+  - module_name: Error_Logger
+    description: エラー情報をログファイルに記録する。
+    functions:
+      - name: log_error
+        description: エラー情報を記録する。
+      - name: log_warning
+        description: 警告情報を記録する。
+      - name: log_info
+        description: 情報を記録する。
+      - name: log_debug
+        description: デバッグ情報を記録する。
+    notes: |
+      ログローテーション機能あり。
+      複数のログレベルに対応。
+      自動的な古いログの削除機能あり。
+
+  - module_name: Config_Manager
+    description: 設定値を管理する。
+    functions:
+      - name: get
+        description: 設定値を取得する。
+      - name: set
+        description: 設定値を設定する。
+      - name: update
+        description: 複数の設定値を一括更新する。
+      - name: reset
+        description: 設定値をデフォルトに戻す。
+    notes: |
+      環境変数とJSONファイルの両方から設定を読み込み。
+      デフォルト値の管理機能あり。
+      設定値の検証機能あり。
+
+# ------------------------------------------------------------------------------
+# テスト要件（新規追加）
+# ------------------------------------------------------------------------------
+test_requirements:
+  unit_tests:
+    - 各モジュールの主要機能に対する単体テスト
+    - モックを使用した外部依存の分離
+    - 非同期処理のテスト対応
+  test_coverage:
+    - 主要な機能のカバレッジ目標: 80%以上
+    - エッジケースの考慮
+    - エラーハンドリングのテスト
+  test_environment:
+    - テスト用の.envファイル
+    - テスト用のキャッシュディレクトリ
+    - モックデータの準備
+
+# ------------------------------------------------------------------------------
+# エラーハンドリング要件（新規追加）
+# ------------------------------------------------------------------------------
+error_handling_requirements:
+  retry_mechanism:
+    - 最大リトライ回数の設定
+    - リトライ間隔の設定
+    - リトライ条件の定義
+  error_logging:
+    - エラーレベルの分類
+    - エラーコンテキストの記録
+    - ログローテーション
+  graceful_degradation:
+    - 部分的な機能停止時の代替処理
+    - エラー発生時のリカバリー手順
+    - ユーザーへの通知方法
+
+# ------------------------------------------------------------------------------
+# パフォーマンス要件（新規追加）
+# ------------------------------------------------------------------------------
+performance_requirements:
+  response_time:
+    - APIリクエストのタイムアウト設定
+    - 画像処理の最適化
+    - キャッシュの活用
+  resource_usage:
+    - メモリ使用量の制限
+    - ディスク使用量の制限
+    - CPU使用率の制限
+  scalability:
+    - 並列処理の制御
+    - レート制限の管理
+    - リソースの効率的な利用
+
+# ------------------------------------------------------------------------------
+# セキュリティ要件（新規追加）
+# ------------------------------------------------------------------------------
+security_requirements:
+  authentication:
+    - APIキーの安全な管理
+    - WordPress認証情報の保護
+    - 環境変数の暗号化
+  data_protection:
+    - キャッシュデータの保護
+    - ログファイルのアクセス制限
+    - 一時ファイルの適切な管理
+  api_security:
+    - HTTPS通信の強制
+    - レート制限の実装
+    - エラーメッセージの制限
+
+# ------------------------------------------------------------------------------
+# 画像処理仕様
+# ------------------------------------------------------------------------------
+image_processing_specifications:
+  face_detection:
+    - tool: "Pythonのアニメ顔検出ライブラリ"
+    - target: "女性の顔"
+    - max_faces: 5
+    - output_format: "トリミング済み画像データ"
+    - implementation:
+      - 画像から顔を検出
+      - 検出した顔を個別にトリミング
+      - 最大5枚まで処理
+      - トリミング結果をGrok API用に変換
+
+# ------------------------------------------------------------------------------
+# Grok LLM統合仕様
+# ------------------------------------------------------------------------------
+grok_integration_specifications:
+  api_requirements:
+    - authentication: "APIキー認証"
+    - endpoint: "xAI公式エンドポイント"
+    - rate_limits: "API利用制限に準拠"
+    - error_handling: "適切なエラーハンドリング"
+
+  request_types:
+    - name: "顔画像分析"
+      description: "トリミングした顔画像からキャラクターを特定"
+      input:
+        - トリミング済み顔画像（最大5枚）
+        - 商品タイトル
+        - 商品説明文
+      output:
+        - キャラクター名
+        - 原作名
+        - 信頼度スコア
+
+    - name: "商品説明生成"
+      description: "商品情報を元に魅力的な説明文を生成"
+      input:
+        - 商品基本情報
+        - キャラクター情報
+        - 原作情報
+      output:
+        - 商品説明文
+        - キャッチコピー
+        - タグ候補
+
+    - name: "コンテンツ最適化"
+      description: "生成したコンテンツの品質チェックと最適化"
+      input:
+        - 生成済みコンテンツ
+        - 最適化要件
+      output:
+        - 最適化済みコンテンツ
+        - 改善提案
+
+  implementation_notes:
+    - プロンプトテンプレートの管理
+    - エラーハンドリングとリトライ
+    - レスポンスのキャッシュ
+    - コスト最適化
+
+# ------------------------------------------------------------------------------
+# 最終的な指示
+# ------------------------------------------------------------------------------
+final_request_to_cursor:
+  - "上記 `user_clarifications_required` セクションの全ての質問に対するユーザーからの回答を収集してください。"
+  - "収集した回答とこのYAMLファイルの他の要件定義を統合し、Pythonでの包括的な開発計画を立て、実装を開始し要件定義を更新してください。"
+  - "もし実装中にさらに不明な点や設計上の判断が必要な箇所が出てきた場合は、再度ユーザーに確認し都度、要件定義を更新してください"
+  - "開発の初期段階で、各主要モジュールの基本的な骨組み（クラス定義、主要関数シグネチャ、.envからの設定読み込み部分など）を提示し、ユーザーに方向性の確認を求めることを推奨します。"
+
+SERVICE_ACCOUNT_FILE = "my-gspread-key.json"
