@@ -2,233 +2,250 @@ import os
 import json
 from typing import Any, Dict, Optional
 from pathlib import Path
+import logging
 from dotenv import load_dotenv
 
 class ConfigManager:
-    """設定管理クラス（シングルトン）"""
+    """設定管理クラス"""
 
-    _instance = None
+    def __init__(self, env_path: str = "API.env"):
+        """
+        初期化
 
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(ConfigManager, cls).__new__(cls)
-            cls._instance._initialized = False
-        return cls._instance
-
-    def __init__(self, config_file: str = "config.json", env_file: str = ".env"):
-        if self._initialized:
-            return
-
-        self.config_file = config_file
-        self.env_file = env_file
-        self.config: Dict[str, Any] = {}
-        self.load_defaults()
-        self.load_env()
-        self.load_config()
-        self._initialized = True
-
-    def load_defaults(self) -> None:
-        """デフォルト設定を読み込む"""
-        self.config = {
-            "POSTING_HOURS": [9, 12, 15, 18, 21],
-            "POSTS_PER_DAY": 3,
-            "MIN_POST_INTERVAL": 3,
-            "LOG_DIR": "logs",
-            "MAX_LOG_SIZE": 10485760,  # 10MB
-            "LOG_BACKUP_COUNT": 5,
-            "IMAGE_QUALITY": 85,
-            "MAX_IMAGE_SIZE": 5242880,  # 5MB
-            "THUMBNAIL_SIZE": (800, 600)
-        }
-
-    def load_env(self) -> None:
-        """環境変数から設定を読み込む"""
-        if os.path.exists(self.env_file):
-            load_dotenv(self.env_file)
-        
-        env_mapping = {
-            "FANZA_API_KEY": "FANZA_API_KEY",
-            "FANZA_SITE_ID": "FANZA_SITE_ID",
-            "WP_API_URL": "WP_API_URL",
-            "WP_USERNAME": "WP_USERNAME",
-            "WP_PASSWORD": "WP_PASSWORD"
-        }
-
-        for env_var, config_key in env_mapping.items():
-            if value := os.getenv(env_var):
-                self.config[config_key] = value
-
-    def load_config(self) -> None:
-        """設定ファイルから設定を読み込む"""
-        try:
-            if os.path.exists(self.config_file):
-                with open(self.config_file, "r", encoding="utf-8") as f:
-                    config_data = json.load(f)
-                    self.config.update(config_data)
-        except Exception as e:
-            print(f"設定ファイルの読み込みに失敗しました: {e}")
-
-    def save_config(self) -> None:
-        """設定をファイルに保存"""
-        try:
-            with open(self.config_file, "w", encoding="utf-8") as f:
-                json.dump(self.config, f, indent=4, ensure_ascii=False)
-        except Exception as e:
-            print(f"設定ファイルの保存に失敗しました: {e}")
-
-    def get(self, key: str, default: Any = None) -> Any:
-        """設定値を取得"""
-        return self.config.get(key, default)
-
-    def set(self, key: str, value: Any) -> None:
-        """設定値を設定"""
-        self.config[key] = value
-        self.save_config()
-
-    def update(self, config_dict: Dict[str, Any]) -> None:
-        """設定値を一括更新"""
-        self.config.update(config_dict)
-        self.save_config()
-
-    def reset(self) -> None:
-        """設定をリセット"""
-        self.config.clear()
-        self.load_defaults()
-        self.save_config()
-
-    def get_all(self) -> Dict[str, Any]:
-        """全設定値を取得"""
-        return self.config.copy()
-
-    def set_defaults(self) -> None:
-        """デフォルト値を設定"""
-        self.load_defaults()
-        self.save_config()
-
-    def _load_defaults(self):
-        """デフォルト設定の読み込み"""
-        self._config = {
-            'LOG_DIR': 'logs',
-            'LOG_LEVEL': 'INFO',
-            'LOG_FORMAT': '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            'LOG_DATE_FORMAT': '%Y-%m-%d %H:%M:%S',
-            'LOG_MAX_BYTES': 10485760,  # 10MB
-            'LOG_BACKUP_COUNT': 5,
-            'POSTING_HOURS': [10, 14, 18],
-            'MAX_POSTS_PER_DAY': 3,
-            'MIN_POST_INTERVAL': 3600,  # 1時間
-            'MAX_RETRIES': 3,
-            'RETRY_DELAY': 5,
-            'TIMEOUT': 30,
-            'BATCH_SIZE': 10,
-            'QUALITY_THRESHOLD': 0.8
-        }
+        Args:
+            env_path: 環境変数ファイルのパス
+        """
+        self.env_path = env_path
+        self._load_env()
 
     def _load_env(self):
         """環境変数の読み込み"""
-        load_dotenv()
-        env_vars = {
-            'FANZA_API_KEY': os.getenv('FANZA_API_KEY'),
-            'FANZA_AFFILIATE_ID': os.getenv('FANZA_AFFILIATE_ID'),
-            'WP_URL': os.getenv('WP_URL'),
-            'WP_USERNAME': os.getenv('WP_USERNAME'),
-            'WP_PASSWORD': os.getenv('WP_PASSWORD'),
-            'WP_APP_PASSWORD': os.getenv('WP_APP_PASSWORD'),
-            'SPREADSHEET_ID': os.getenv('SPREADSHEET_ID'),
-            'CREDENTIALS_FILE': os.getenv('CREDENTIALS_FILE'),
-            'TOKEN_FILE': os.getenv('TOKEN_FILE')
+        if os.path.exists(self.env_path):
+            load_dotenv(self.env_path, override=True)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """
+        設定値を取得
+
+        Args:
+            key: 設定キー
+            default: デフォルト値
+
+        Returns:
+            設定値
+        """
+        return os.getenv(key, default)
+
+    def set(self, key: str, value: Any):
+        """
+        設定値を設定
+
+        Args:
+            key: 設定キー
+            value: 設定値
+        """
+        os.environ[key] = str(value)
+
+    def get_all(self) -> dict:
+        """
+        全ての設定値を取得
+
+        Returns:
+            設定値の辞書
+        """
+        return dict(os.environ)
+
+class Config_Manager:
+    """アプリケーションの設定を管理するクラス"""
+
+    def __init__(self, config_dir: str = "config"):
+        """
+        初期化メソッド
+
+        Args:
+            config_dir (str): 設定ファイルを保存するディレクトリパス
+        """
+        self.config_dir = Path(config_dir)
+        self.config_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 環境変数の読み込み
+        self.env_manager = ConfigManager()
+        
+        # ロガーの設定
+        self.logger = logging.getLogger("config_manager")
+        self.logger.setLevel(logging.INFO)
+        
+        # 設定ファイルのパス
+        self.config_file = self.config_dir / "config.json"
+        
+        # デフォルト設定
+        self.default_config = {
+            "fanza": {
+                "api_id": self.env_manager.get("FANZA_API_ID", ""),
+                "affiliate_id": self.env_manager.get("FANZA_AFFILIATE_ID", ""),
+                "cache_expiry": {
+                    "product_info": 3600,  # 1時間
+                    "search_results": 1800  # 30分
+                }
+            },
+            "wordpress": {
+                "url": self.env_manager.get("WP_URL", ""),
+                "username": self.env_manager.get("WP_USERNAME", ""),
+                "password": self.env_manager.get("WP_PASSWORD", ""),
+                "categories": ["同人"],
+                "tags": ["FANZA"]
+            },
+            "scheduler": {
+                "max_retries": 3,
+                "retry_delay": 60,  # 秒
+                "posts_per_day": 24,
+                "post_interval": 60  # 分
+            },
+            "grok": {
+                "api_key": self.env_manager.get("GROK_API_KEY", ""),
+                "model": "grok-1",
+                "max_tokens": 1000,
+                "temperature": 0.7
+            },
+            "logging": {
+                "level": "INFO",
+                "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                "file": "logs/app.log"
+            }
         }
-        for key, value in env_vars.items():
-            if value is not None:
-                self._config[key] = value
+        
+        # 設定の読み込み
+        self.config = self.load_config()
 
-    def _load_config(self):
-        """設定ファイルの読み込み"""
-        config_file = Path('config/config.json')
-        if config_file.exists():
-            with open(config_file, 'r', encoding='utf-8') as f:
-                config_data = json.load(f)
-                self._config.update(config_data)
-
-    def get_log_config(self) -> Dict[str, Any]:
+    def load_config(self) -> Dict[str, Any]:
         """
-        ログ設定を取得
+        設定を読み込む
 
         Returns:
-            Dict[str, Any]: ログ設定
+            Dict[str, Any]: 設定データ
         """
-        return self._config["log"]
+        if self.config_file.exists():
+            try:
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                self.logger.info("設定ファイルを読み込みました")
+                return config
+            except Exception as e:
+                self.logger.error(f"設定ファイルの読み込みに失敗しました: {e}")
+                return self.default_config
+        else:
+            self.logger.info("設定ファイルが存在しないため、デフォルト設定を使用します")
+            return self.default_config
 
-    def get_api_config(self) -> Dict[str, Any]:
+    def save_config(self) -> bool:
         """
-        API設定を取得
-
-        Returns:
-            Dict[str, Any]: API設定
-        """
-        return self._config["api"]
-
-    def get_face_detection_config(self) -> Dict[str, Any]:
-        """
-        顔検出設定を取得
-
-        Returns:
-            Dict[str, Any]: 顔検出設定
-        """
-        return self._config["face_detection"]
-
-    def get_description_config(self) -> Dict[str, Any]:
-        """
-        説明生成設定を取得
+        設定を保存する
 
         Returns:
-            Dict[str, Any]: 説明生成設定
+            bool: 保存が成功したかどうか
         """
-        return self._config["description"]
+        try:
+            with open(self.config_file, 'w', encoding='utf-8') as f:
+                json.dump(self.config, f, ensure_ascii=False, indent=2)
+            self.logger.info("設定を保存しました")
+            return True
+        except Exception as e:
+            self.logger.error(f"設定の保存に失敗しました: {e}")
+            return False
 
-    def get_optimization_config(self) -> Dict[str, Any]:
+    def get_config(self, section: Optional[str] = None) -> Dict[str, Any]:
         """
-        コンテンツ最適化設定を取得
-
-        Returns:
-            Dict[str, Any]: コンテンツ最適化設定
-        """
-        return self._config["optimization"]
-
-    def get_error_message(self, category: str, error_type: str) -> str:
-        """
-        エラーメッセージを取得
+        設定を取得する
 
         Args:
-            category: エラーカテゴリ
-            error_type: エラータイプ
+            section (Optional[str]): 取得する設定セクション
 
         Returns:
-            str: エラーメッセージ
+            Dict[str, Any]: 設定データ
         """
-        return self._config["error_messages"].get(category, {}).get(error_type, "不明なエラーが発生しました")
+        if section:
+            return self.config.get(section, {})
+        return self.config
 
-    def get_config(self) -> Dict[str, Any]:
+    def update_config(self, section: str, key: str, value: Any) -> bool:
         """
-        全設定を取得
-
-        Returns:
-            Dict[str, Any]: 全設定
-        """
-        return self._config
-
-    def update_config(self, new_config: Dict[str, Any]) -> None:
-        """
-        設定を更新
+        設定を更新する
 
         Args:
-            new_config: 新しい設定
-        """
-        self._config.update(new_config)
+            section (str): 更新する設定セクション
+            key (str): 更新する設定キー
+            value (Any): 更新する値
 
-    def reset_config(self) -> None:
-        """設定をリセット"""
-        self._config = {}
-        self._load_defaults()
-        self._load_env()
-        self._load_config() 
+        Returns:
+            bool: 更新が成功したかどうか
+        """
+        try:
+            if section not in self.config:
+                self.config[section] = {}
+            self.config[section][key] = value
+            return self.save_config()
+        except Exception as e:
+            self.logger.error(f"設定の更新に失敗しました: {e}")
+            return False
+
+    def validate_config(self) -> bool:
+        """
+        設定の妥当性を検証する
+
+        Returns:
+            bool: 設定が妥当かどうか
+        """
+        required_fields = {
+            "fanza": ["api_id", "affiliate_id"],
+            "wordpress": ["url", "username", "password"],
+            "grok": ["api_key"]
+        }
+        
+        for section, fields in required_fields.items():
+            if section not in self.config:
+                self.logger.error(f"必須セクション '{section}' が存在しません")
+                return False
+            
+            for field in fields:
+                if field not in self.config[section] or not self.config[section][field]:
+                    self.logger.error(f"必須フィールド '{section}.{field}' が設定されていません")
+                    return False
+        
+        return True
+
+    def get_env_value(self, key: str, default: Any = None) -> Any:
+        """
+        環境変数の値を取得する
+
+        Args:
+            key (str): 環境変数名
+            default (Any): デフォルト値
+
+        Returns:
+            Any: 環境変数の値
+        """
+        return self.env_manager.get(key, default)
+
+    def set_env_value(self, key: str, value: str) -> None:
+        """
+        環境変数の値を設定する
+
+        Args:
+            key (str): 環境変数名
+            value (str): 設定する値
+        """
+        self.env_manager.set(key, value)
+
+    def reset_to_defaults(self) -> bool:
+        """
+        設定をデフォルト値にリセットする
+
+        Returns:
+            bool: リセットが成功したかどうか
+        """
+        try:
+            self.config = self.default_config.copy()
+            return self.save_config()
+        except Exception as e:
+            self.logger.error(f"設定のリセットに失敗しました: {e}")
+            return False 

@@ -153,13 +153,17 @@ fanza_api_specifications:
 # ユーザーへの確認事項（更新）
 # ------------------------------------------------------------------------------
 user_clarifications_required:
-  section_B_Grok_LLM_Integration:
+  section_B_Hybrid_LLM_Integration:
     B1_Face_Trimming_Image_Selection:
       - question: "FANZA商品ページに複数のサンプル画像がある場合、どの画像を顔トリミングの対象としますか？"
-    B2_Grok_Input_Text:
-      - question: "Grokへのテンプレートプロンプトに含めるテキスト情報は、具体的にFANZAのどの情報を利用しますか？"
-    B3_Grok_API_Specification:
-      - question: "Grok APIの具体的な利用方法（APIキーの取得方法、エンドポイント、認証方法など）について、xAIの公式情報をご確認いただけますか？"
+    B2_Gemini_Input_Text:
+      - question: "Gemini（主処理）へのテンプレートプロンプトに含めるテキスト情報は、具体的にFANZAのどの情報を利用しますか？"
+    B3_Gemini_API_Specification:
+      - question: "Gemini APIの具体的な利用方法（APIキーの取得方法、エンドポイント、認証方法など）について、Google AIの公式情報をご確認いただけますか？"
+    B4_Grok_API_Specification:
+      - question: "Grok API（副処理・検証用）の具体的な利用方法（APIキーの取得方法、エンドポイント、認証方法など）について、xAIの公式情報をご確認いただけますか？"
+    B5_Hybrid_Strategy:
+      - question: "GeminiとGrokの使い分け戦略（信頼度しきい値、コスト制限、併用条件など）についてどのような基準を設定しますか？"
 
 # ------------------------------------------------------------------------------
 # データ取得戦略（更新）
@@ -343,23 +347,56 @@ module_specifications:
         - スクレイピングの不使用
         - データ更新のタイムラグへの対応
 
-  - module_name: Grok_Analyzer
-    description: X社のLLM (Grok) と連携し、原作名・キャラ名を推測する。
+  - module_name: Hybrid_Analyzer
+    description: Gemini（主）とGrok（副）のハイブリッドLLM連携で、原作名・キャラ名推測と記事説明文生成を行う。
     functions:
       - name: get_anime_face_image_data
         description: >
           FANZA商品ページから取得したサンプル画像URLを元に画像をダウンロードし、
           Pythonの指定ライブラリ/ロジック (ユーザー指定) を用いて顔部分をトリミングし、
-          Grok APIにアップロード可能な画像データ形式に変換する。
+          Gemini/Grok APIにアップロード可能な画像データ形式に変換する。
         inputs: サンプル画像URL (1枚)
-        outputs: 顔画像データ (Grok APIの仕様に合わせた形式)
-      - name: infer_origin_and_character
+        outputs: 顔画像データ (Gemini/Grok APIの仕様に合わせた形式)
+      - name: infer_origin_and_character_gemini
         description: >
-          トリミングした顔画像データ、商品タイトル、商品説明文の一部などをテンプレートプロンプトと共に
-          Grok APIに送信し、推測された原作名・キャラ名を取得する。
+          Gemini（主処理）でトリミングした顔画像データ、商品タイトル、商品説明文の一部などをテンプレートプロンプトと共に
+          送信し、推測された原作名・キャラ名を取得する。
         inputs: 顔画像データ, 商品タイトル, 商品説明文の一部など, テンプレートプロンプト
         outputs: 推測された原作名, 推測されたキャラ名 (辞書形式など)
-        notes: Grok APIキーは.envから読み込む。API仕様（エンドポイント、認証、リクエスト/レスポンス形式）はユーザーからの情報を元に実装。
+        notes: Gemini APIキーは.envから読み込む。Gemini API仕様（エンドポイント、認証、リクエスト/レスポンス形式）を利用。
+      - name: generate_description_gemini
+        description: >
+          Gemini（主処理）で商品情報と推測結果を基に魅力的な記事説明文を生成する。
+        inputs: 商品情報, 推測された原作名・キャラ名, テンプレートプロンプト
+        outputs: 生成された記事説明文 (文字列形式)
+        notes: Geminiの文章生成能力を活用し、読者の興味を引く説明文を作成。
+      - name: infer_origin_and_character_grok
+        description: >
+          Grok（副処理・検証用）でトリミングした顔画像データ、商品タイトル、商品説明文の一部などをテンプレートプロンプトと共に
+          送信し、推測された原作名・キャラ名を取得する。主にGemini結果の検証・補完に使用。
+        inputs: 顔画像データ, 商品タイトル, 商品説明文の一部など, テンプレートプロンプト
+        outputs: 推測された原作名, 推測されたキャラ名 (辞書形式など)
+        notes: Grok APIキーは.envから読み込む。Gemini結果の確度が低い場合のセカンドオピニオンとして活用。
+      - name: merge_analysis_results
+        description: >
+          GeminiとGrokの分析結果を統合し、最も確度の高い結果を選択・統合する。
+        inputs: Gemini分析結果, Grok分析結果, 信頼度しきい値
+        outputs: 統合された最終分析結果 (辞書形式)
+        notes: 両LLMの結果を比較し、一致度や信頼度スコアを基に最適解を選択。
+    role_distribution:
+      gemini_primary:
+        - キャラクター・原作名推測（主処理）
+        - 記事説明文生成
+        - 総合的な品質チェック
+      grok_secondary:
+        - キャラクター・原作名推測（検証・補完）
+        - Gemini結果の妥当性確認
+        - セカンドオピニオン提供
+    implementation_strategy:
+      - Geminiを第一選択として使用
+      - Gemini結果の信頼度が低い場合のみGrokを併用
+      - 両者の結果を統合して最終判定
+      - コスト効率とAPI制限を考慮した使い分け
 
   - module_name: WordPress_Article_Generator
     description: 取得・推測した情報を元に、WordPress投稿用の記事コンテンツ（タイトル、本文、カテゴリー、タグ等）を生成する。SWELLテーマの利用を前提とした記事構成を考慮する。
@@ -609,18 +646,26 @@ image_processing_specifications:
       - トリミング結果をGrok API用に変換
 
 # ------------------------------------------------------------------------------
-# Grok LLM統合仕様
+# Hybrid LLM統合仕様（Gemini + Grok）
 # ------------------------------------------------------------------------------
-grok_integration_specifications:
-  api_requirements:
+hybrid_llm_integration_specifications:
+  gemini_api_requirements:
+    - authentication: "APIキー認証"
+    - endpoint: "Google AI Studio公式エンドポイント"
+    - rate_limits: "Gemini API利用制限に準拠"
+    - error_handling: "適切なエラーハンドリング"
+    - role: "主処理（第一選択）"
+
+  grok_api_requirements:
     - authentication: "APIキー認証"
     - endpoint: "xAI公式エンドポイント"
-    - rate_limits: "API利用制限に準拠"
+    - rate_limits: "Grok API利用制限に準拠"
     - error_handling: "適切なエラーハンドリング"
+    - role: "副処理（検証・補完）"
 
   request_types:
-    - name: "顔画像分析"
-      description: "トリミングした顔画像からキャラクターを特定"
+    - name: "顔画像分析（Gemini主）"
+      description: "トリミングした顔画像からキャラクターを特定（Geminiで主処理）"
       input:
         - トリミング済み顔画像（最大5枚）
         - 商品タイトル
@@ -629,9 +674,23 @@ grok_integration_specifications:
         - キャラクター名
         - 原作名
         - 信頼度スコア
+      fallback: "信頼度が低い場合はGrokで再分析"
 
-    - name: "商品説明生成"
-      description: "商品情報を元に魅力的な説明文を生成"
+    - name: "顔画像分析（Grok副）"
+      description: "Gemini結果の検証・補完のためのセカンドオピニオン"
+      input:
+        - トリミング済み顔画像（最大5枚）
+        - 商品タイトル
+        - 商品説明文
+        - Gemini分析結果
+      output:
+        - キャラクター名
+        - 原作名
+        - 信頼度スコア
+        - Gemini結果との一致度
+
+    - name: "商品説明生成（Gemini専用）"
+      description: "商品情報を元に魅力的な説明文を生成（Geminiのみ使用）"
       input:
         - 商品基本情報
         - キャラクター情報
@@ -641,20 +700,44 @@ grok_integration_specifications:
         - キャッチコピー
         - タグ候補
 
-    - name: "コンテンツ最適化"
-      description: "生成したコンテンツの品質チェックと最適化"
+    - name: "結果統合・最適化"
+      description: "GeminiとGrokの分析結果を統合し最適解を選択"
       input:
-        - 生成済みコンテンツ
-        - 最適化要件
+        - Gemini分析結果
+        - Grok分析結果（存在する場合）
+        - 統合ルール設定
       output:
-        - 最適化済みコンテンツ
-        - 改善提案
+        - 統合された最終結果
+        - 選択根拠
+        - 信頼度評価
+
+  hybrid_strategy:
+    decision_flow:
+      1: "Geminiで主分析を実行"
+      2: "Gemini結果の信頼度を評価"
+      3: "信頼度が閾値以下の場合、Grokで追加分析"
+      4: "両者の結果を統合し最適解を選択"
+      5: "最終結果を出力"
+
+    cost_optimization:
+      - "Geminiを第一選択（コスト効率重視）"
+      - "Grokは必要時のみ使用（精度重視時）"
+      - "API使用量の監視と制御"
+      - "キャッシュ活用による重複リクエスト回避"
+
+    quality_assurance:
+      - "両LLMの結果一致度による品質評価"
+      - "信頼度スコアに基づく結果選択"
+      - "人間によるサンプルチェック機能"
+      - "継続的な精度改善機能"
 
   implementation_notes:
-    - プロンプトテンプレートの管理
-    - エラーハンドリングとリトライ
-    - レスポンスのキャッシュ
-    - コスト最適化
+    - プロンプトテンプレートの管理（Gemini/Grok別）
+    - エラーハンドリングとリトライ（API別）
+    - レスポンスのキャッシュ（統合結果含む）
+    - コスト最適化（使い分け戦略）
+    - 結果統合ロジックの実装
+    - 品質監視とフィードバック機能
 
 # ------------------------------------------------------------------------------
 # 最終的な指示

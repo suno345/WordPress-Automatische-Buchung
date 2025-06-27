@@ -3,7 +3,6 @@ import traceback
 import asyncio
 from src.spreadsheet.spreadsheet_manager import SpreadsheetManager
 from src.fanza.fanza_data_retriever import FANZA_Data_Retriever
-from src.utils.discord_notify import send_discord_error
 from src.utils.wp_api import post_to_wordpress
 from src.utils.wp_article_generator import generate_wp_article
 from src.utils.fanza_scraper import search_fanza_products_by_keyword
@@ -82,19 +81,15 @@ async def main():
                             row_data['error_details'] = str(wp_e)
                             sheet_manager.add_product(row_data)
                             sheet_manager.update_product_error(url, str(wp_e))
-                            await send_discord_error(f"WordPress投稿失敗: {url}\n{wp_e}")
                     except Exception as e:
                         print(f"    [ERROR] 追加処理失敗: {url} {e}")
                         sheet_manager.update_product_error(url, str(e))
-                        await send_discord_error(f"追加処理失敗: {url}\n{e}")
             except Exception as e:
                 print(f"  [ERROR] 商品URLスクレイピング失敗: {e}")
                 traceback.print_exc()
-                await send_discord_error(f"商品URLスクレイピング失敗: {kw['keyword']}\n{e}")
     except Exception as e:
         print(f"[ERROR] {e}")
         traceback.print_exc()
-        await send_discord_error(f"致命的エラー\n{e}")
         sys.exit(1)
 
 
