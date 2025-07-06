@@ -53,18 +53,10 @@ class Gemini_Analyzer:
             else:
                 self.character_prompt = self.get_default_character_prompt()
             
-            # 説明文生成用プロンプト
-            description_prompt_file = prompts_dir / "gemini_description_prompt.txt"
-            if description_prompt_file.exists():
-                with open(description_prompt_file, 'r', encoding='utf-8') as f:
-                    self.description_prompt = f.read()
-            else:
-                self.description_prompt = self.get_default_description_prompt()
                 
         except Exception as e:
             self.logger.warning(f"プロンプトファイル読み込み失敗、デフォルトを使用: {e}")
             self.character_prompt = self.get_default_character_prompt()
-            self.description_prompt = self.get_default_description_prompt()
     
     def get_default_character_prompt(self) -> str:
         """デフォルトキャラクター分析プロンプト"""
@@ -87,25 +79,6 @@ class Gemini_Analyzer:
   "character_features": "特徴の説明",
   "art_style": "画風の説明"
 }"""
-    
-    def get_default_description_prompt(self) -> str:
-        """デフォルト説明文生成プロンプト"""
-        return """この商品情報と画像を元に、魅力的な商品説明文を生成してください：
-
-商品タイトル: {title}
-ジャンル: {genre}
-サークル名: {circle}
-キャラクター: {character}
-原作: {original_work}
-
-以下の要件に従って説明文を作成してください：
-1. 200-300字程度
-2. キャラクターの魅力を強調
-3. 原作への言及
-4. 読者の興味を引く表現
-5. 主観的なレビューは避ける
-
-説明文のみを回答してください（JSON形式ではなく、プレーンテキストで）。"""
     
     async def encode_image_to_base64(self, image_url: str) -> Optional[str]:
         """画像URLをBase64エンコード"""
@@ -165,11 +138,6 @@ class Gemini_Analyzer:
         except Exception as e:
             self.error_logger.log_error("GEMINI_ANALYSIS_ERROR", f"キャラクター分析エラー: {str(e)}")
             return self.get_empty_result(f"分析中にエラー: {str(e)}")
-    
-    async def generate_description(self, product_info: Dict[str, Any], character_info: Dict[str, Any]) -> str:
-        """商品説明文を生成（注意：この機能は使用されません - Grokが担当）"""
-        # この関数は互換性のために残しますが、実際はGrokが説明文を生成します
-        return self.get_default_description(product_info)
     
     async def call_gemini_api(self, image_base64: Optional[str], prompt: str, product_info: Dict[str, Any]) -> Optional[str]:
         """Gemini APIを呼び出し"""
@@ -274,20 +242,10 @@ class Gemini_Analyzer:
             'confidence': 0,
             'character_features': '',
             'art_style': '',
-            'generated_description': '',
             'analysis_source': 'gemini',
             'error_reason': reason
         }
     
-    def get_default_description(self, product_info: Dict[str, Any]) -> str:
-        """デフォルト説明文を生成"""
-        title = product_info.get('title', '商品')
-        circle = product_info.get('circle_name', '')
-        
-        if circle:
-            return f"{circle}による{title}。魅力的なイラストと内容で、ファンにおすすめの作品です。"
-        else:
-            return f"{title}。高品質なイラストと魅力的な内容の作品です。"
 
 # 旧Grok_Analyzerとの互換性のためのエイリアス
 Grok_Analyzer = Gemini_Analyzer

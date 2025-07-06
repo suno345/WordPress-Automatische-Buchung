@@ -58,3 +58,19 @@ env/
 *.backup
 *.tmp
 temp/
+
+# ドキュメント（docsディレクトリに移動済み）
+/README.md
+/FOLDER_STRUCTURE.md
+/GEMINI_MIGRATION.md
+/VPS_SETUP.md
+/requirements_vs_implementation_comparison.md
+/並列駆動.md
+/要件定義.txt
+
+# 開発用スクリプト
+scripts/dev/
+scripts/maintenance/cleanup_*.py
+
+# PowerShellスクリプト
+*.ps1

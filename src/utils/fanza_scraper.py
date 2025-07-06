@@ -6,6 +6,8 @@ import re
 import aiohttp
 import os
 import asyncio
+import time
+from functools import lru_cache
 # from dotenv import load_dotenv # load_dotenvはauto_wp_post.pyで行う
 
 # .envファイルを読み込む -> auto_wp_post.pyで行うため削除
@@ -85,6 +87,63 @@ def clean_title(title: str) -> str:
     title = title.strip()
     
     return title
+
+# キャッシュ用のグローバル変数
+_image_validation_cache = {}
+_cache_ttl = 3600  # 1時間
+
+@lru_cache(maxsize=1000)
+def _cached_clean_title(title: str) -> str:
+    """タイトルクリーニングのキャッシュ版"""
+    return clean_title(title)
+
+async def verify_image_urls_optimized(image_urls: List[str]) -> List[str]:
+    """キャッシュ付き画像ユール検証（最適化版）"""
+    if not image_urls:
+        return []
+    
+    current_time = time.time()
+    valid_urls = []
+    urls_to_check = []
+    
+    # キャッシュをチェック
+    for url in image_urls:
+        cache_entry = _image_validation_cache.get(url)
+        if cache_entry and (current_time - cache_entry['timestamp']) < _cache_ttl:
+            if cache_entry['valid']:
+                valid_urls.append(url)
+        else:
+            urls_to_check.append(url)
+    
+    # 新しいURLのみ検証を並列実行
+    if urls_to_check:
+        print(f"Debug: {len(urls_to_check)}件の画像を並列検証中...")
+        
+        async def check_single_url(url):
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.head(url, timeout=aiohttp.ClientTimeout(total=5)) as response:
+                        valid = response.status == 200 and response.headers.get('content-type', '').startswith('image/')
+                        # キャッシュに保存
+                        _image_validation_cache[url] = {
+                            'valid': valid,
+                            'timestamp': current_time
+                        }
+                        return url if valid else None
+            except:
+                # エラー時もキャッシュに保存（無効として）
+                _image_validation_cache[url] = {
+                    'valid': False,
+                    'timestamp': current_time
+                }
+                return None
+        
+        # 並列検証実行
+        results = await asyncio.gather(*[check_single_url(url) for url in urls_to_check], return_exceptions=True)
+        valid_urls.extend([url for url in results if url and not isinstance(url, Exception)])
+    
+    print(f"Debug: 画像検証結果 - 入力: {len(image_urls)}件, 有効: {len(valid_urls)}件")
+    return valid_urls
 
 async def scrape_fanza_product_details(url, sheet_original_work=None, sheet_character=None):
     """

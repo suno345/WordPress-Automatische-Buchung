@@ -16,6 +16,67 @@ from src.utils.pre_filter import PreFilter
 import re # 正規表現モジュールのインポート
 from urllib.parse import quote
 
+def generate_free_reading_section(title, original_work='', character_name=''):
+    """無料で読める？セクションを生成（SEO強化版）"""
+    
+    # タイトルとキャラクター名の組み合わせ
+    if character_name and character_name not in ['不明', '不明（特定不可）', '不明（特定できず）', '不明（確定情報なし）', '不明（フルネームの特定不可）', '不明（提供情報からはキャラクター特定不可）', '不明（キャラクター名が特定できない）']:
+        full_title = f"{title}【{character_name}】"
+        seo_keyword = f"{character_name} 同人"
+    else:
+        full_title = title
+        seo_keyword = title
+    
+    # 原作名がある場合はSEOキーワードに追加
+    if original_work and original_work not in ['不明', '不明（特定不可）', '不明（特定できず）', '不明（確定情報なし）', '不明（複数の原作が混在する可能性あり）', '不明（提供情報からは原作特定不可）', '不明（原作名が特定できない）'] and not original_work.startswith('不明（推定：'):
+        seo_keyword = f"{original_work} {seo_keyword}"
+    
+    section_html = f'''<!-- wp:heading -->
+<h2>漫画『{full_title}』は漫画rawやhitomiで無料で読める？</h2>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph -->
+<p>漫画rawやhitomi、momon:GA（モモンガ）などの海賊版サイトを使えば、{full_title}を全巻無料で読めるかもしれません。しかし、海賊版サイトを利用するのは控えましょう。</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph -->
+<p>無断転載している違法の海賊版サイトを使うと、{full_title}を全巻無料で読める反面、以下のリスクが生じるからです。</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:list -->
+<ul>
+<li>デバイスの故障</li>
+<li>クレカ情報といった個人情報の漏洩・悪用</li>
+<li>摘発・逮捕</li>
+</ul>
+<!-- /wp:list -->
+
+<!-- wp:paragraph -->
+<p>{full_title}を全巻無料で読めるのは魅力的ですが、違法の海賊版サイトを使うことで、より大きなお金や社会的地位を失う恐れがあります。</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph -->
+<p>そのため、違法の海賊版サイトを使うのは控えるべきです。</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph -->
+<p>{full_title}を無料で読むなら、合法的に無料配信している電子書籍サイトを利用しましょう。</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:heading {"level":3} -->
+<h3>{seo_keyword} rawで検索しても危険！</h3>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph -->
+<p>「{seo_keyword} raw」「{character_name} raw」「{original_work} raw」などで検索して海賊版サイトを探すのは、前述のリスクがあるため大変危険です。</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph -->
+<p>本作品はFANZA公式サイトで正規購入できます。高品質な作品を適正な価格で楽しみ、クリエイターを応援しましょう。</p>
+<!-- /wp:paragraph -->'''
+    
+    return section_html
+
 # ====== グローバル変数 ======
 # 最終予約時間を管理するグローバル変数
 global_last_scheduled_time = None
@@ -242,6 +303,24 @@ def get_unprocessed_products(ss):
 
     print(f"Debug: 最終的に {len(products)} 件の未処理商品を発見")
     return products
+
+async def call_grok_api_with_retry(prompt, max_tokens=500, max_retries=3):
+    """リトライ機能付きGrok API呼び出し"""
+    for attempt in range(max_retries):
+        try:
+            result = await call_grok_api(prompt, max_tokens)
+            if result:  # 成功時は結果を返す
+                return result
+        except Exception as e:
+            if attempt == max_retries - 1:  # 最後の試行
+                print(f"Grok APIリトライ終了: {e}")
+                return None
+            else:
+                # 指数バックオフ
+                wait_time = (2 ** attempt) + 1
+                print(f"Grok APIリトライ {attempt + 1}/{max_retries} - {wait_time}秒待機")
+                await asyncio.sleep(wait_time)
+    return None
 
 async def call_grok_api(prompt, max_tokens=500):
     """
@@ -687,8 +766,11 @@ def generate_article_content(details, main_image, gallery_images, url, grok_desc
     # テーブルHTML生成
     info_table = f'<!-- wp:table {{"className":"is-style-regular"}} -->\n<figure class="wp-block-table is-style-regular"><table><tbody>\n{chr(10).join(table_rows)}\n</tbody></table></figure>\n<!-- /wp:table -->'
 
+    # 無料で読める？セクションの生成（SEO強化版）
+    free_reading_section = generate_free_reading_section(title, original_work, character_name)
+    
     # 記事本文の構築（ブロックエディタ対応）
-    content = f'{main_image_html}<!-- wp:paragraph -->\n<p>{catch_copy}</p>\n<!-- /wp:paragraph -->\n\n<!-- wp:heading -->\n<h2>作品情報</h2>\n<!-- /wp:heading -->\n\n{info_table}\n\n<!-- wp:heading -->\n<h2>サンプル画像</h2>\n<!-- /wp:heading -->\n\n{gallery_html}<!-- wp:heading -->\n<h2>作品紹介</h2>\n<!-- /wp:heading -->\n\n<!-- wp:paragraph -->\n<p>{description}</p>\n<!-- /wp:paragraph -->\n\n{featured_image_html}{button_html}\n\n<!-- wp:heading -->\n<h2>無料で読める？</h2>\n<!-- /wp:heading -->\n\n<!-- wp:paragraph -->\n<p>本作品は有料コンテンツです。FANZA公式サイトで試し読みが可能な場合もあります。</p>\n<!-- /wp:paragraph -->'
+    content = f'{main_image_html}<!-- wp:paragraph -->\n<p>{catch_copy}</p>\n<!-- /wp:paragraph -->\n\n<!-- wp:heading -->\n<h2>作品情報</h2>\n<!-- /wp:heading -->\n\n{info_table}\n\n<!-- wp:heading -->\n<h2>サンプル画像</h2>\n<!-- /wp:heading -->\n\n{gallery_html}<!-- wp:heading -->\n<h2>作品紹介</h2>\n<!-- /wp:heading -->\n\n<!-- wp:paragraph -->\n<p>{description}</p>\n<!-- /wp:paragraph -->\n\n{featured_image_html}{button_html}\n\n{free_reading_section}'
 
     return content, seo_description
 
@@ -809,13 +891,36 @@ async def process_product(ss, row_idx, row, url):
                 print(f"✓ キャラクター名を修正: 「{original_character}」→「{corrected_character}」")
                 print(f"✓ 修正後、通常の投稿処理を継続します")
         
-        # Grok APIで原作名・キャラクター名を推測（OpenAI APIで抽出した特徴情報を活用）
-        print("Debug: Grok APIで原作名・キャラクター名を推測中...")
+        # AI分析の並列処理（Grok + Gemini同時実行）
+        print("Debug: AI分析を並列実行中...")
         try:
-            grok_suggestion = await get_grok_original_work_suggestion(details, sheet_original_work, sheet_character)
+            # GrokとGeminiを同時実行
+            grok_task = get_grok_original_work_suggestion(details, sheet_original_work, sheet_character)
+            
+            # Geminiはキャラクター分析のみ実行
+            gemini_task = None
+            if details.get('sample_images'):  # 画像がある場合のみGemini実行
+                from src.core.gemini.analyzer import Gemini_Analyzer
+                gemini_analyzer = Gemini_Analyzer()
+                gemini_task = gemini_analyzer.analyze_character_from_images(
+                    details['sample_images'][:3], details
+                )
+            
+            # 並列実行
+            if gemini_task:
+                grok_suggestion, gemini_result = await asyncio.gather(
+                    grok_task, gemini_task, return_exceptions=True
+                )
+                print(f"Debug: Gemini結果 - {gemini_result.get('character_name', '不明') if isinstance(gemini_result, dict) else 'エラー'}")
+            else:
+                grok_suggestion = await grok_task
+                gemini_result = None
+                print("Debug: 画像がないためGemini分析をスキップ")
+                
         except Exception as e:
-            print(f"Warning: Grok API呼び出しでエラー: {e}")
+            print(f"Warning: AI分析でエラー: {e}")
             grok_suggestion = None
+            gemini_result = None
         
         # Grokの推測結果とスプレッドシートの情報を照合
         validation_result = validate_grok_results_with_sheet(grok_suggestion, sheet_original_work, sheet_character)
@@ -832,13 +937,11 @@ async def process_product(ss, row_idx, row, url):
         main_image = details.get('main_image', '')
         sample_images = details.get('sample_images', [])
         
-        # サンプル画像の検証を無効化（すべての画像を使用）
-        # valid_sample_images = []
-        # if sample_images:
-        #     valid_sample_images = await fanza_scraper.verify_image_urls(sample_images)
-        
-        # すべてのサンプル画像を使用（検証なし）
-        valid_sample_images = sample_images
+        # 最適化された画像検証（キャッシュ付き並列処理）
+        if sample_images:
+            valid_sample_images = await fanza_scraper.verify_image_urls_optimized(sample_images)
+        else:
+            valid_sample_images = []
         
         # サンプル画像の数を制限
         if len(valid_sample_images) > MAX_SAMPLE_IMAGES:
@@ -859,27 +962,41 @@ async def process_product(ss, row_idx, row, url):
         if gallery_images:
             print(f"Debug: Gallery Images URLs: {gallery_images[:3]}...")  # 最初の3つだけ表示
 
-        # Grok APIで紹介文リライト
-        print("Debug: Grok APIで紹介文をリライト中...")
-        grok_description = await get_grok_rewritten_description(
-            details.get('description', ''),
-            details,
-            target_audience={}
-        )
-        # Grok APIでリード文生成
-        print("Debug: Grok APIでリード文を生成中...")
-        grok_lead = await get_grok_rewritten_lead(
-            details.get('catch_copy', '') or details.get('description', ''),
-            details,
-            target_audience={}
-        )
-        # Grok APIでSEO説明文生成
-        print("Debug: Grok APIでSEO説明文を生成中...")
-        grok_seo = await get_grok_rewritten_seo_description(
-            details.get('description', ''),
-            details,
-            target_audience={}
-        )
+        # Grok APIでコンテンツ生成（並列実行）
+        print("Debug: Grokコンテンツ生成を並列実行中...")
+        try:
+            # Grokのコンテンツ生成を並列実行
+            description_task = get_grok_rewritten_description(
+                details.get('description', ''), details, target_audience={}
+            )
+            lead_task = get_grok_rewritten_lead(
+                details.get('catch_copy', '') or details.get('description', ''), details, target_audience={}
+            )
+            seo_task = get_grok_rewritten_seo_description(
+                details.get('description', ''), details, target_audience={}
+            )
+            
+            # 並列実行
+            grok_description, grok_lead, grok_seo = await asyncio.gather(
+                description_task, lead_task, seo_task, return_exceptions=True
+            )
+            
+            # エラーハンドリング
+            if isinstance(grok_description, Exception):
+                print(f"Warning: Grok説明文生成エラー: {grok_description}")
+                grok_description = details.get('description', '')
+            if isinstance(grok_lead, Exception):
+                print(f"Warning: Grokリード文生成エラー: {grok_lead}")
+                grok_lead = details.get('catch_copy', '') or details.get('description', '')[:80]
+            if isinstance(grok_seo, Exception):
+                print(f"Warning: GrokSEO説明文生成エラー: {grok_seo}")
+                grok_seo = details.get('description', '')[:120]
+                
+        except Exception as e:
+            print(f"Warning: Grokコンテンツ生成でエラー: {e}")
+            grok_description = details.get('description', '')
+            grok_lead = details.get('catch_copy', '') or details.get('description', '')[:80]
+            grok_seo = details.get('description', '')[:120]
         
         # 投稿ステータスを照合結果に基づいて決定（最初に定義）
         # 事前フィルタリングで除外された場合は強制的に下書き保存
@@ -1591,18 +1708,10 @@ async def main():
                 # APIを使って商品CIDリストを取得
                 product_cids_from_search = await fanza_scraper.search_fanza_products_by_keyword(keyword)
                 
-                # 【重要】品番による厳密な重複チェック
-                filtered_cids = []
+                print(f"   検索ヒット: {len(product_cids_from_search)}件")
+                
+                # バッチ用リストに追加（重複チェックは後で一括実行）
                 for cid in product_cids_from_search:
-                    if not ss.check_product_exists(cid):
-                        filtered_cids.append(cid)
-                    else:
-                        print(f"   ⚠️  品番 {cid} は既に登録済みのためスキップ")
-                
-                print(f"   検索ヒット: {len(product_cids_from_search)}件 → フィルタ後: {len(filtered_cids)}件")
-                
-                # 新規商品をバッチ追加用リストに追加
-                for cid in filtered_cids:
                     url = f"https://www.dmm.co.jp/dc/doujin/-/detail/=/cid={cid}/"
                     product_data = {
                         'status': '未処理',
@@ -1616,20 +1725,44 @@ async def main():
                         'error_details': ''
                     }
                     products_to_add.append(product_data)
-                    print(f"   ✅ 新規商品追加予定: {cid}")
+                    print(f"   新規商品追加予定: {cid}")
+                
         
         except Exception as e:
             print(f"❌ キーワード検索中にエラー: {str(e)}")
         
-        # バッチ処理で一括追加
+        # 重複チェックのバッチ実行（最適化）
         if products_to_add:
-            print(f"📝 {len(products_to_add)}件の新商品をバッチ追加中...")
-            if ss.add_products_batch(products_to_add):
-                print(f"✅ {len(products_to_add)}件の新商品を追加完了")
+            print(f"🔍 {len(products_to_add)}件の商品の重複チェックをバッチ実行中...")
+            
+            # URLリストを抽出
+            urls_to_check = [product['url'] for product in products_to_add]
+            
+            # 一括重複チェック（最適化版）
+            duplicate_results = ss.check_products_batch(urls_to_check)
+            
+            # 重複していない商品のみフィルタリング
+            filtered_products = []
+            for product in products_to_add:
+                if not duplicate_results.get(product['url'], True):  # 重複していない場合
+                    filtered_products.append(product)
+                else:
+                    cid = ss.extract_product_code(product['url'])
+                    print(f"   ⚠️  品番 {cid} は既に登録済みのためスキップ")
+            
+            print(f"   重複チェック結果: {len(products_to_add)}件 → {len(filtered_products)}件（{len(products_to_add) - len(filtered_products)}件の重複を除外）")
+            
+            # フィルタリング後の商品をバッチ追加
+            if filtered_products:
+                print(f"📝 {len(filtered_products)}件の新商品をバッチ追加中...")
+                if ss.add_products_batch(filtered_products):
+                    print(f"✅ {len(filtered_products)}件の新商品を追加完了")
+                else:
+                    print("❌ バッチ追加に失敗")
             else:
-                print("❌ バッチ追加に失敗")
+                print("📋 追加する新商品はありませんでした（全て重複）")
         else:
-            print("📋 追加する新商品はありませんでした")
+            print("📋 検索結果がありませんでした")
 
     # ===== 未処理商品の処理（重複防止強化版） =====
     print("\n" + "="*60)

@@ -1,6 +1,7 @@
 import os
 from typing import List, Dict, Optional, Any
 from datetime import datetime
+import time
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from src.monitor.monitor import Monitor
@@ -255,9 +256,41 @@ class SpreadsheetManager:
         
         return None
 
+    _product_codes_cache = None
+    _cache_timestamp = None
+    _cache_ttl = 300  # 5分間キャッシュ
+    
+    def _get_cached_product_codes(self) -> set:
+        """既存商品コードをキャッシュ付きで取得"""
+        current_time = time.time()
+        
+        # キャッシュが有効な場合はそれを返す
+        if (self._product_codes_cache is not None and 
+            self._cache_timestamp is not None and 
+            current_time - self._cache_timestamp < self._cache_ttl):
+            return self._product_codes_cache
+        
+        # キャッシュを更新
+        sheet_name = '商品管理'
+        url_values = self._get_sheet_values(sheet_name, f'D:D')
+        
+        # HashSetでO(1)検索を実現
+        product_codes = set()
+        for row in url_values:
+            if row:
+                code = self.extract_product_code(str(row[0]))
+                if code:
+                    product_codes.add(code.strip())
+        
+        self._product_codes_cache = product_codes
+        self._cache_timestamp = current_time
+        
+        print(f"Debug: 商品コードキャッシュを更新 - {len(product_codes)}件")
+        return product_codes
+    
     def check_product_exists(self, product_identifier: str) -> bool:
         """
-        商品管理シートに特定の商品が存在するかチェック
+        商品管理シートに特定の商品が存在するかチェック（最適化版）
         商品URLまたは商品IDでチェック可能
         """
         # 品番を抽出
@@ -266,21 +299,26 @@ class SpreadsheetManager:
             print(f"Warning: 有効な品番を抽出できませんでした: {product_identifier}")
             return False
 
-        sheet_name = '商品管理'
-        # 商品URLカラム(D列)のみを取得してチェックを高速化
-        url_values = self._get_sheet_values(sheet_name, f'D:D')
-
-        # 既存のURLリストから品番を抽出して比較
-        existing_product_codes = [self.extract_product_code(str(row[0])) for row in url_values if row]
-
-        # 比較対象の品番も正規化
-        normalized_product_code = product_code.strip()
-
-        # デバッグ用にチェック対象URLと既存URLリストを出力
-        print(f"Debug in check_product_exists: Checking for '{normalized_product_code}' against {len(existing_product_codes)} existing product codes.")
-        # print(f"Debug in check_product_exists: Existing URLs (first 10): {existing_urls[:10]}...") # 全て出力すると長くなる場合
-
-        return normalized_product_code in existing_product_codes
+        # キャッシュされたHashSetでO(1)検索
+        existing_codes = self._get_cached_product_codes()
+        normalized_code = product_code.strip()
+        
+        return normalized_code in existing_codes
+    
+    def check_products_batch(self, product_identifiers: list) -> dict:
+        """複数商品の重複チェックをバッチ処理"""
+        # 1回のシート取得で全商品をチェック
+        existing_codes = self._get_cached_product_codes()
+        
+        results = {}
+        for identifier in product_identifiers:
+            code = self.extract_product_code(identifier)
+            if code:
+                results[identifier] = code.strip() in existing_codes
+            else:
+                results[identifier] = False
+                
+        return results
 
     def add_product(self, product_data: Dict[str, Any]) -> bool:
         """商品情報を追加（商品管理シート9カラム対応）"""
