@@ -13,7 +13,8 @@ from src.core.wordpress.poster import WordPressPoster as WordPress_Poster
 from src.core.fanza.data_retriever import FANZA_Data_Retriever
 from src.core.hybrid_analyzer import Hybrid_Analyzer as Grok_Analyzer
 from src.core.spreadsheet.manager import SpreadsheetManager
-from src.utils.logger import get_logger as Monitor
+from src.utils.logger import get_logger
+from src.monitor.monitor import Monitor
 from src.utils.error_logger import Error_Logger
 from src.utils.fanza_scraper import verify_image_urls, scrape_fanza_product_details
 
