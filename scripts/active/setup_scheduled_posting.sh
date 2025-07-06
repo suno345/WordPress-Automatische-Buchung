@@ -13,10 +13,10 @@ echo "30分間隔での自動実行を設定します（1日48回）"
 echo "現在のcrontabをバックアップ中..."
 crontab -l > /tmp/crontab_backup_$(date +%Y%m%d_%H%M%S).txt
 
-# crontabエントリの作成
+# crontabエントリの作成（キーワードベース）
 CRON_ENTRY="0,30 * * * * cd $PROJECT_DIR && source $VENV_ACTIVATE && $PYTHON_BIN src/vps_main.py --mode scheduled --batch-size 1 >> /var/log/wordpress_auto_poster.log 2>&1"
 
-echo "追加するcrontabエントリ:"
+echo "追加するcrontabエントリ（スプレッドシートキーワード使用）:"
 echo "$CRON_ENTRY"
 
 # 既存のエントリをチェック
@@ -43,6 +43,8 @@ echo "=== 設定内容 ==="
 echo "実行間隔: 30分毎（毎時00分と30分）"
 echo "1日の実行回数: 48回"
 echo "バッチサイズ: 1件/回"
+echo "データソース: スプレッドシート「キーワード管理」"
+echo "処理方式: キーワードベース商品検索 + 予約投稿"
 echo "ログファイル: /var/log/wordpress_auto_poster.log"
 echo ""
 echo "=== 現在のcrontab ==="

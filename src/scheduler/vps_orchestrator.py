@@ -85,16 +85,18 @@ class VPS_Simple_Orchestrator:
             raise
     
     async def run_scheduled_posting(self, posts_per_batch: int = 1):
-        """24時間予約投稿システム（30分間隔、1日48回実行）"""
+        """24時間予約投稿システム（30分間隔、スプレッドシートキーワード使用）"""
         try:
             self.monitor.log_debug(f"VPS予約投稿開始 - バッチサイズ: {posts_per_batch}")
             
-            # 最新の商品情報を取得
-            products = await self.fanza_retriever.get_latest_products(hits=posts_per_batch * 3)
+            # スプレッドシートから処理対象キーワードを取得
+            active_keywords = self.spreadsheet_manager.get_active_keywords()
             
-            if not products:
-                self.monitor.log_warning("商品情報が取得できませんでした")
+            if not active_keywords:
+                self.monitor.log_warning("処理対象のキーワードがありません")
                 return 0
+            
+            self.monitor.log_debug(f"処理対象キーワード数: {len(active_keywords)}")
             
             # 重複除外と次回予約投稿時間の計算
             last_scheduled_time = self.spreadsheet_manager.get_last_scheduled_time()
@@ -104,14 +106,39 @@ class VPS_Simple_Orchestrator:
                 # 初回実行時は現在時刻から30分後
                 next_scheduled_time = datetime.now() + timedelta(minutes=30)
             
-            # 有効な商品を選定
+            # キーワードから商品を検索・選定
             valid_products = []
-            for product in products:
-                product_url = product.get('URL', '')
-                if (product_url and 
-                    not self.spreadsheet_manager.check_product_exists(product_url) and 
-                    len(valid_products) < posts_per_batch):
-                    valid_products.append(product)
+            for keyword_info in active_keywords:
+                if len(valid_products) >= posts_per_batch:
+                    break
+                    
+                keyword = keyword_info.get('keyword', '')
+                original_work = keyword_info.get('original_work', '')
+                character_name = keyword_info.get('character_name', '')
+                
+                if not keyword:
+                    continue
+                
+                try:
+                    # キーワードで商品検索
+                    products = await self.fanza_retriever.search_products(keyword, limit=5)
+                    
+                    for product in products:
+                        if len(valid_products) >= posts_per_batch:
+                            break
+                            
+                        product_url = product.get('URL', '')
+                        if (product_url and 
+                            not self.spreadsheet_manager.check_product_exists(product_url)):
+                            # キーワード情報を商品に付加
+                            product['sheet_original_work'] = original_work
+                            product['sheet_character_name'] = character_name
+                            product['source_keyword'] = keyword
+                            valid_products.append(product)
+                            
+                except Exception as e:
+                    self.monitor.log_warning(f"キーワード検索失敗: {keyword} - {str(e)}")
+                    continue
             
             if not valid_products:
                 self.monitor.log_warning("投稿対象の新規商品がありません")
@@ -127,7 +154,7 @@ class VPS_Simple_Orchestrator:
                     # 各商品の予約投稿時間を30分ずつずらす
                     post_scheduled_time = next_scheduled_time + timedelta(minutes=30 * i)
                     
-                    result = await self._process_single_product_scheduled(product, post_scheduled_time)
+                    result = await self._process_single_product_scheduled_with_keywords(product, post_scheduled_time)
                     if result:
                         success_count += 1
                         self.monitor.log_debug(f"予約投稿設定完了: {product.get('title', 'Unknown')} at {post_scheduled_time.strftime('%m/%d %H:%M')}")
@@ -351,6 +378,94 @@ class VPS_Simple_Orchestrator:
             self.error_logger.log_error("SCHEDULED_PRODUCT_ERROR", f"予約投稿商品処理エラー: {str(e)}")
             return False
     
+    async def _process_single_product_scheduled_with_keywords(self, product: Dict[str, Any], scheduled_time: datetime) -> bool:
+        """キーワード情報付き商品の予約投稿処理"""
+        try:
+            product_url = product.get('URL', '')
+            product_id = product.get('product_id', '')
+            
+            # スプレッドシートから取得したキーワード情報
+            original_work = product.get('sheet_original_work', '')
+            character_name = product.get('sheet_character_name', '')
+            source_keyword = product.get('source_keyword', '')
+            
+            # 商品情報取得（キーワード情報付き）
+            from src.utils.fanza_scraper import scrape_fanza_product_details
+            product_info = await scrape_fanza_product_details(
+                product_url, 
+                sheet_original_work=original_work,
+                sheet_character=character_name
+            )
+            product_info['url'] = product_url
+            product_info['title'] = product.get('title', '')
+            product_info['product_id'] = product_id
+            
+            # 画像検証
+            valid_images = await verify_image_urls(product_info.get('sample_images', []))
+            if not valid_images:
+                self.monitor.log_warning(f"有効な画像なし: {product_id}")
+                # 画像なしでも記事作成を試行
+                product_info['sample_images'] = []
+            else:
+                product_info['sample_images'] = valid_images
+            
+            # Grok分析（スプレッドシート情報を優先使用）
+            grok_result = {
+                'character_name': character_name,
+                'original_work': original_work
+            }
+            
+            try:
+                # AIによる追加分析も実行
+                ai_result = await self.grok_analyzer.analyze_product(product_info)
+                
+                # スプレッドシート情報が空の場合のみAI結果を使用
+                if not character_name and ai_result.get('character_name'):
+                    grok_result['character_name'] = ai_result.get('character_name')
+                if not original_work and ai_result.get('original_work'):
+                    grok_result['original_work'] = ai_result.get('original_work')
+                    
+            except Exception as e:
+                self.monitor.log_warning(f"Grok分析失敗（スプレッドシート情報を使用）: {str(e)}")
+            
+            # キャラ名チェック
+            if not grok_result.get('character_name') or grok_result.get('character_name').strip() == '':
+                self.monitor.log_warning(f"キャラ名未取得のため下書き保存: {product_id}")
+                article_data = self.article_generator.generate_article_content(
+                    product_info, {'character_name': '未取得', 'original_work': original_work}
+                )
+                await self._save_as_draft(article_data, product_info, f"キャラ名未取得 (キーワード: {source_keyword})")
+                return False
+            
+            # 記事生成
+            article_data = self.article_generator.generate_article_content(
+                product_info, grok_result
+            )
+            
+            # WordPress予約投稿（将来の時刻で投稿設定）
+            article_data['scheduled_date'] = scheduled_time.isoformat()
+            post_result = await self.wordpress_poster.post_scheduled_article(article_data)
+            
+            if post_result:
+                # スプレッドシートに予約投稿として記録
+                self.spreadsheet_manager.add_product({
+                    'url': product_url,
+                    'title': product.get('title', ''),
+                    'character_name': grok_result.get('character_name', ''),
+                    'original_work': grok_result.get('original_work', ''),
+                    'status': '予約投稿',
+                    'post_url': str(post_result.get('post_id', '')),
+                    'reserve_date': scheduled_time.strftime('%m/%d %H:%M'),
+                    'error_details': f'キーワード: {source_keyword}',
+                })
+                return True
+            
+            return False
+            
+        except Exception as e:
+            self.error_logger.log_error("SCHEDULED_KEYWORD_PRODUCT_ERROR", f"キーワード予約投稿商品処理エラー: {str(e)}")
+            return False
+
     async def _save_as_draft(self, article_data: Dict[str, Any], product_info: Dict[str, Any], reason: str):
         """下書きとして保存"""
         try:
