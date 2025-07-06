@@ -4,17 +4,15 @@ import requests
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
-from src.utils.logger import Logger
+from src.utils.logger import get_logger
 from src.utils.config_manager import ConfigManager
-from src.utils.security_manager import SecurityManager
 
 class WordPressPoster:
     """WordPress投稿クラス"""
 
     def __init__(self, wp_url: str, wp_username: str, wp_password: str):
-        self.logger = Logger.get_logger(__name__)
+        self.logger = get_logger(__name__)
         self.config = ConfigManager()
-        self.security = SecurityManager()
         self.wp_url = wp_url
         self.wp_username = wp_username
         self.wp_password = wp_password

@@ -11,7 +11,7 @@ from pathlib import Path
 import json
 from dotenv import load_dotenv
 
-from src.utils.logger import Logger
+from src.utils.logger import get_logger
 from src.utils.error_logger import Error_Logger
 
 class Grok_Description_Generator:
@@ -26,7 +26,7 @@ class Grok_Description_Generator:
         self.model = os.getenv('GROK_MODEL', 'grok-beta')
         
         # ログ設定
-        self.logger = Logger.get_logger(__name__)
+        self.logger = get_logger(__name__)
         self.error_logger = Error_Logger()
         
         # API制限設定

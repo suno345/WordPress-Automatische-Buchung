@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 from src.core.gemini.analyzer import Gemini_Analyzer
 from src.core.grok.description_generator import Grok_Description_Generator
-from src.utils.logger import Logger
+from src.utils.logger import get_logger
 from src.utils.error_logger import Error_Logger
 
 class Hybrid_Analyzer:
@@ -25,7 +25,7 @@ class Hybrid_Analyzer:
         self.grok_generator = Grok_Description_Generator()
         
         # ログ設定
-        self.logger = Logger.get_logger(__name__)
+        self.logger = get_logger(__name__)
         self.error_logger = Error_Logger()
     
     async def analyze_product(self, product_info: Dict[str, Any]) -> Dict[str, Any]:
