@@ -23,7 +23,7 @@ class Gemini_Analyzer:
         load_dotenv()
         
         self.api_key = os.getenv('GEMINI_API_KEY')
-        self.model = os.getenv('GEMINI_MODEL', 'gemini-1.5-flash')
+        self.model = os.getenv('GEMINI_MODEL', 'gemini-2.5-pro')
         self.base_url = "https://generativelanguage.googleapis.com/v1beta"
         
         # ログ設定
