@@ -29,11 +29,16 @@ class VPS_Simple_Orchestrator:
         self.posts_per_run = int(os.getenv('VPS_POSTS_PER_RUN', '5'))
         self.retry_attempts = int(os.getenv('RETRY_ATTEMPTS', '2'))
         
+        # WordPress設定の取得
+        wp_url = os.getenv('WP_URL')
+        wp_username = os.getenv('WP_USERNAME')
+        wp_password = os.getenv('WP_APP_PASSWORD') or os.getenv('WP_PASSWORD')
+        
         # コンポーネントの初期化
         self.fanza_retriever = FANZA_Data_Retriever()
         self.grok_analyzer = Grok_Analyzer()
         self.article_generator = WordPressArticleGenerator()
-        self.wordpress_poster = WordPress_Poster()
+        self.wordpress_poster = WordPress_Poster(wp_url, wp_username, wp_password)
         self.spreadsheet_manager = SpreadsheetManager()
         self.monitor = Monitor()
         self.error_logger = Error_Logger()
