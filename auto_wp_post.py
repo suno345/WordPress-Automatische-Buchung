@@ -730,7 +730,7 @@ def generate_article_content(details, main_image, gallery_images, url, grok_desc
 
 '''
     
-    button_html = f'<!-- wp:html -->\n<div class="swell-block-button red_ is-style-btn_solid"><a href="{affiliate_url}" class="swell-block-button__link" rel="nofollow noopener" target="_blank"><span>続きはこちら</span></a></div>\n<!-- /wp:html -->'
+    button_html = f'<!-- wp:html -->\n<div class="swell-block-button red_ is-style-btn_solid"><a href="{affiliate_url}" class="swell-block-button__link" rel="nofollow noopener" target="_blank"><span>続きはコチラ</span></a></div>\n<!-- /wp:html -->'
 
     # 作品情報テーブル（原作・キャラ不明時は該当行を除外）
     table_rows = []
