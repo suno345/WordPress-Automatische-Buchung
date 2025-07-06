@@ -9,10 +9,10 @@ import asyncio
 import aiohttp
 import json
 from src.utils import fanza_scraper
-from src.spreadsheet.spreadsheet_manager import SpreadsheetManager
-from src.wordpress.wordpress_poster import WordPress_Poster
-from src.utils.character_validator import CharacterValidator
-from src.utils.pre_filter import PreFilter
+from src.core.spreadsheet.manager import SpreadsheetManager
+from src.core.wordpress.poster import WordPress_Poster
+from src.core.utils.character_validator import CharacterValidator
+from src.core.utils.pre_filter import PreFilter
 import re # 正規表現モジュールのインポート
 from urllib.parse import quote
 
@@ -775,6 +775,9 @@ def generate_article_content(details, main_image, gallery_images, url, grok_desc
     return content, seo_description
 
 async def process_product(ss, row_idx, row, url):
+    # グローバル変数の宣言
+    global global_last_scheduled_time
+    
     # タイムゾーンの設定
     jst = timezone(timedelta(hours=9), 'Asia/Tokyo')
     
@@ -1016,7 +1019,6 @@ async def process_product(ss, row_idx, row, url):
         article_content, seo_description = generate_article_content(details, main_image, gallery_images, url, grok_description, grok_lead, grok_seo)
 
         # 投稿予約時間を計算（グローバル最終予約時間を考慮）
-        global global_last_scheduled_time
         base_time = datetime.now(jst)
         
         if is_scheduled_post:
@@ -1242,7 +1244,6 @@ async def process_product(ss, row_idx, row, url):
             
             # グローバル最終予約時間を更新（予約投稿の場合のみ）
             if validation_result['is_match'] and not excluded_by_prefilter:
-                global global_last_scheduled_time
                 global_last_scheduled_time = scheduled_time
                 print(f"🕐 グローバル最終予約時間を更新: {scheduled_time.strftime('%m/%d %H:%M')}")
             
@@ -1665,7 +1666,7 @@ async def call_openai_api_with_images(prompt, image_urls, max_tokens=600):
         return None
 
 async def main():
-    # グローバル変数の初期化
+    # グローバル変数の宣言と初期化
     global global_last_scheduled_time
     global_last_scheduled_time = None
     print("🕐 グローバル最終予約時間を初期化しました")
@@ -1820,7 +1821,6 @@ async def main():
         result = await process_product(ss, row_idx, row_data, actual_url_for_processing)
         
         # グローバル最終予約時間の状態をログ出力
-        global global_last_scheduled_time
         if global_last_scheduled_time:
             print(f"🕐 現在のグローバル最終予約時間: {global_last_scheduled_time.strftime('%m/%d %H:%M')}")
         else:
