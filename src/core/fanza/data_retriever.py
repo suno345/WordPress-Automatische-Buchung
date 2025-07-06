@@ -271,28 +271,48 @@ class FANZA_Data_Retriever:
                 'floor': 'digital_doujin',  # 修正: フロアをdigital_doujinに
                 'hits': str(limit),
                 'keyword': keyword,
-                'sort': 'rank'
+                'sort': 'rank',
+                'output': 'json'  # 必須パラメータ追加
             }
+            
+            print(f"[DEBUG] 検索API呼び出し - キーワード: {keyword}, リクエストURL: {self.base_url}/ItemList")
+            print(f"[DEBUG] パラメータ: {params}")
             
             async with aiohttp.ClientSession() as session:
                 async with session.get(f"{self.base_url}/ItemList", params=params) as response:
+                    print(f"[DEBUG] APIレスポンス ステータス: {response.status}")
+                    
                     if response.status == 200:
                         data = await response.json()
-                        if 'items' in data:
+                        print(f"[DEBUG] APIレスポンス構造: {list(data.keys()) if isinstance(data, dict) else type(data)}")
+                        
+                        # レスポンス構造を適切に処理
+                        products = []
+                        if 'result' in data and 'items' in data['result']:
+                            products = data['result']['items']
+                            print(f"[DEBUG] 検索結果: {len(products)}件取得")
+                        elif 'items' in data:
                             products = data['items']
+                            print(f"[DEBUG] 検索結果: {len(products)}件取得")
+                        else:
+                            print(f"[DEBUG] 予期しないレスポンス構造: {data}")
                             
+                        if products:
                             # キャッシュに保存
                             await self._save_cache(cache_key, products)
-                            
                             return products
                         else:
-                            raise Exception("商品情報が見つかりません")
+                            print(f"[WARNING] キーワード '{keyword}' で商品が見つかりませんでした")
+                            return []
                     else:
                         error_text = await response.text()
-                        raise Exception(f"APIリクエストに失敗: {error_text}")
+                        print(f"[ERROR] APIリクエスト失敗 - ステータス: {response.status}, エラー: {error_text}")
+                        raise Exception(f"APIリクエストに失敗: {response.status} - {error_text}")
                         
         except Exception as e:
-            raise Exception(f"商品検索中にエラーが発生: {str(e)}")
+            print(f"[ERROR] 商品検索エラー - キーワード: {keyword}, エラー: {str(e)}")
+            # API検索に失敗した場合、空のリストを返すように変更
+            return []
     
     async def _respect_rate_limit(self):
         """レート制限を遵守"""

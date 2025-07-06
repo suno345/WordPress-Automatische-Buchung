@@ -126,21 +126,26 @@ class VPS_Simple_Orchestrator:
                     continue
                 
                 try:
-                    # キーワードで商品検索
-                    products = await self.fanza_retriever.search_products(keyword, limit=5)
+                    # キーワードで商品検索（ハイブリッド検索を使用）
+                    products = await self.fanza_retriever.hybrid_search_products(keyword, limit=5)
+                    
+                    self.monitor.log_debug(f"キーワード '{keyword}' で {len(products)} 件の商品を取得")
                     
                     for product in products:
                         if len(valid_products) >= posts_per_batch:
                             break
                             
-                        product_url = product.get('URL', '')
+                        product_url = product.get('URL', '') or product.get('url', '')
                         if (product_url and 
                             not self.spreadsheet_manager.check_product_exists(product_url)):
                             # キーワード情報を商品に付加
                             product['sheet_original_work'] = original_work
                             product['sheet_character_name'] = character_name
                             product['source_keyword'] = keyword
+                            # URLの正規化
+                            product['URL'] = product_url
                             valid_products.append(product)
+                            self.monitor.log_debug(f"商品追加: {product.get('title', product.get('product_id', 'Unknown'))}")
                             
                 except Exception as e:
                     self.monitor.log_warning(f"キーワード検索失敗: {keyword} - {str(e)}")
