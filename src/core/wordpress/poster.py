@@ -145,9 +145,22 @@ class WordPressPoster:
         if featured_media:
             data['featured_media'] = featured_media
 
-        response = self.session.post(f"{self.api_url}/posts", json=data)
-        response.raise_for_status()
-        return response.json()
+        try:
+            self.logger.debug(f"WordPress予約投稿リクエスト - URL: {self.api_url}/posts")
+            self.logger.debug(f"投稿データ: {json.dumps(data, ensure_ascii=False, indent=2)}")
+            
+            response = self.session.post(f"{self.api_url}/posts", json=data)
+            self.logger.debug(f"WordPressレスポンス ステータス: {response.status_code}")
+            
+            if response.status_code != 201:
+                error_detail = response.text
+                self.logger.error(f"WordPress投稿エラー - ステータス: {response.status_code}, 詳細: {error_detail}")
+                
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            self.logger.error(f"WordPress予約投稿例外: {str(e)}")
+            raise
     
     async def post_article(self, article_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """記事投稿（互換性維持）"""

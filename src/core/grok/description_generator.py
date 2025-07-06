@@ -23,7 +23,7 @@ class Grok_Description_Generator:
         
         self.api_key = os.getenv('GROK_API_KEY')
         self.base_url = os.getenv('GROK_BASE_URL', 'https://api.x.ai/v1')
-        self.model = os.getenv('GROK_MODEL', 'grok-beta')
+        self.model = os.getenv('GROK_MODEL', 'grok-2-1212')
         
         # ログ設定
         self.logger = get_logger(__name__)
