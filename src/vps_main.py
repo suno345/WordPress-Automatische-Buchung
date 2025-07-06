@@ -13,11 +13,11 @@ from datetime import datetime
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.scheduler.vps_orchestrator import VPS_Simple_Orchestrator
-from src.utils.logger import Logger
+from src.utils.logger import get_logger
 
 def setup_logging():
     """ログ設定"""
-    logger = Logger.get_logger("vps_main")
+    logger = get_logger("vps_main")
     return logger
 
 async def run_daily_posts(max_posts: int = 5):
