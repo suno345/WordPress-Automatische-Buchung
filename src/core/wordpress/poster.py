@@ -113,6 +113,34 @@ class WordPressPoster:
         if not tag:
             tag = self.create_tag(name, description)
         return tag
+    
+    def convert_tags_to_ids(self, tag_names: List[str]) -> List[int]:
+        """タグ名のリストをIDのリストに変換"""
+        tag_ids = []
+        for tag_name in tag_names:
+            if isinstance(tag_name, str) and tag_name.strip():
+                try:
+                    tag = self.ensure_tag_exists(tag_name.strip())
+                    if tag and 'id' in tag:
+                        tag_ids.append(tag['id'])
+                        self.logger.debug(f"タグ変換: '{tag_name}' -> ID {tag['id']}")
+                except Exception as e:
+                    self.logger.warning(f"タグ変換失敗: {tag_name} - {str(e)}")
+        return tag_ids
+    
+    def convert_categories_to_ids(self, category_names: List[str]) -> List[int]:
+        """カテゴリ名のリストをIDのリストに変換"""
+        category_ids = []
+        for category_name in category_names:
+            if isinstance(category_name, str) and category_name.strip():
+                try:
+                    category = self.ensure_category_exists(category_name.strip())
+                    if category and 'id' in category:
+                        category_ids.append(category['id'])
+                        self.logger.debug(f"カテゴリ変換: '{category_name}' -> ID {category['id']}")
+                except Exception as e:
+                    self.logger.warning(f"カテゴリ変換失敗: {category_name} - {str(e)}")
+        return category_ids
 
     def test_media_upload(self, file_path: str) -> Dict[str, Any]:
         """メディアアップロードのテスト"""
@@ -171,6 +199,12 @@ class WordPressPoster:
             tags = article_data.get('tags', [])
             featured_media = article_data.get('featured_media')
             
+            # タグ・カテゴリをIDに変換
+            if categories and isinstance(categories[0], str):
+                categories = self.convert_categories_to_ids(categories)
+            if tags and isinstance(tags[0], str):
+                tags = self.convert_tags_to_ids(tags)
+            
             result = self.create_post(title, content, categories, tags, featured_media)
             return {'post_id': result.get('id'), 'url': result.get('link')}
         except Exception as e:
@@ -185,6 +219,12 @@ class WordPressPoster:
             categories = article_data.get('categories', [])
             tags = article_data.get('tags', [])
             featured_media = article_data.get('featured_media')
+            
+            # タグ・カテゴリをIDに変換
+            if categories and isinstance(categories[0], str):
+                categories = self.convert_categories_to_ids(categories)
+            if tags and isinstance(tags[0], str):
+                tags = self.convert_tags_to_ids(tags)
             
             result = self.create_draft(title, content, categories, tags, featured_media)
             return {'post_id': result.get('id'), 'url': result.get('link')}
@@ -201,6 +241,12 @@ class WordPressPoster:
             categories = article_data.get('categories', [])
             tags = article_data.get('tags', [])
             featured_media = article_data.get('featured_media')
+            
+            # タグ・カテゴリをIDに変換
+            if categories and len(categories) > 0 and isinstance(categories[0], str):
+                categories = self.convert_categories_to_ids(categories)
+            if tags and len(tags) > 0 and isinstance(tags[0], str):
+                tags = self.convert_tags_to_ids(tags)
             
             result = self.create_scheduled_post(title, content, scheduled_date, categories, tags, featured_media)
             return {'post_id': result.get('id'), 'url': result.get('link')}
