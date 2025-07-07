@@ -127,7 +127,7 @@ class VPS_Simple_Orchestrator:
                 
                 try:
                     # キーワードで商品検索（ハイブリッド検索を使用）
-                    products = await self.fanza_retriever.hybrid_search_products(keyword, limit=5)
+                    products = await self.fanza_retriever.hybrid_search_products(keyword, limit=30)
                     
                     self.monitor.log_debug(f"キーワード '{keyword}' で {len(products)} 件の商品を取得")
                     
