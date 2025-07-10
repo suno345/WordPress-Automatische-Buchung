@@ -170,8 +170,6 @@ DMM_AFFILIATE_ID = os.getenv('DMM_AFFILIATE_ID')
 # xAI API設定
 XAI_API_KEY = os.getenv('XAI_API_KEY')
 
-# OpenAI API設定
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 # 環境変数をfanza_scraperでも使用できるように設定
 if DMM_API_ID:
@@ -190,7 +188,6 @@ print(f"Debug: DMM_API_ID = {DMM_API_ID}")
 print(f"Debug: DMM_AFFILIATE_ID = {DMM_AFFILIATE_ID}")
 print(f"Debug: MAX_SAMPLE_IMAGES = {MAX_SAMPLE_IMAGES}")
 print(f"Debug: XAI_API_KEY = {'設定済み' if XAI_API_KEY else '未設定'}")
-print(f"Debug: OPENAI_API_KEY = {'設定済み' if OPENAI_API_KEY else '未設定'}")
 print(f"Debug: WP_URL = {WP_URL}")
 print(f"Debug: WP_USERNAME = {WP_USERNAME}")
 print(f"Debug: WP_APP_PASSWORD = {'設定済み' if WP_APP_PASSWORD else '未設定'}")
@@ -599,9 +596,9 @@ async def get_grok_original_work_suggestion(product_info, sheet_original_work=''
     description = product_info.get('description', '')
     sample_images = product_info.get('sample_images', [])
     
-    # OpenAI APIの拒否問題を回避するため、画像処理をスキップ
+    # 画像処理はGemini APIが担当
     face_images_info = ""
-    print(f"Debug: OpenAI API拒否問題を回避するため、画像処理をスキップしてテキストのみで処理します")
+    print("Info: 画像解析はGemini APIを使用します")
     
     # 代替として、タイトルと説明文から特徴を推測
     if sample_images:
@@ -1448,7 +1445,7 @@ def validate_grok_results_with_sheet(grok_result, sheet_original_work, sheet_cha
     Grokの推測結果とスプレッドシートの情報を照合する（JSON形式に依存しない設計）
     
     Args:
-        grok_result: OpenAI APIからの推測結果（JSON文字列またはテキスト）
+        grok_result: Grok APIからの推測結果（JSON文字列またはテキスト）
         sheet_original_work: スプレッドシートの原作名
         sheet_character: スプレッドシートのキャラ名
     
@@ -1461,18 +1458,18 @@ def validate_grok_results_with_sheet(grok_result, sheet_original_work, sheet_cha
         }
     """
     try:
-        print(f"Debug: OpenAI結果の型: {type(grok_result)}")
-        print(f"Debug: OpenAI結果の内容: {grok_result}")
+        print(f"Debug: Grok結果の型: {type(grok_result)}")
+        print(f"Debug: Grok結果の内容: {grok_result}")
         
         # 1. API呼び出し失敗の場合
         if grok_result is None:
-            print("Warning: OpenAI API呼び出し失敗")
-            return create_fallback_result(sheet_original_work, sheet_character, 'OpenAI API呼び出し失敗')
+            print("Warning: Grok API呼び出し失敗")
+            return create_fallback_result(sheet_original_work, sheet_character, 'Grok API呼び出し失敗')
         
         # 2. 空の応答の場合
         if not grok_result or (isinstance(grok_result, str) and not grok_result.strip()):
-            print("Warning: OpenAI APIから空の応答")
-            return create_fallback_result(sheet_original_work, sheet_character, 'OpenAI APIから空の応答')
+            print("Warning: Grok APIから空の応答")
+            return create_fallback_result(sheet_original_work, sheet_character, 'Grok APIから空の応答')
         
         # 3. 応答内容の解析
         grok_data = None
@@ -1489,7 +1486,7 @@ def validate_grok_results_with_sheet(grok_result, sheet_original_work, sheet_cha
                 if grok_data is None:
                     print("Debug: 正規表現ベースの抽出も失敗")
                     return create_fallback_result(sheet_original_work, sheet_character, 
-                                                'OpenAI応答から情報抽出失敗（JSON・正規表現の両方で失敗）')
+                                                'Grok応答から情報抽出失敗（JSON・正規表現の両方で失敗）')
         elif isinstance(grok_result, dict):
             # 既にdict形式の場合
             grok_data = grok_result
@@ -1516,7 +1513,7 @@ def validate_grok_results_with_sheet(grok_result, sheet_original_work, sheet_cha
         )
         
     except Exception as e:
-        print(f"Error: OpenAI結果の照合中にエラー: {str(e)}")
+        print(f"Error: Grok結果の照合中にエラー: {str(e)}")
         import traceback
         print(f"Traceback: {traceback.format_exc()}")
         return create_fallback_result(sheet_original_work, sheet_character, f'照合処理エラー: {str(e)}')
@@ -1722,7 +1719,7 @@ def build_validation_result(original_match, character_match, grok_original, grok
     is_match = original_match and character_match
     
     if is_match:
-        # 一致した場合：OpenAIの結果を使用
+        # 一致した場合：Grokの結果を使用
         validated_original = grok_original if grok_original else sheet_original_work
         validated_chars = grok_characters[:5] if grok_characters else ([sheet_character] if sheet_character else [])
         match_reason = f"原作名とキャラクター名が一致。追加キャラクター{len(grok_characters)}名を含む"
@@ -1741,9 +1738,9 @@ def build_validation_result(original_match, character_match, grok_original, grok
             if not original_match and not character_match:
                 match_reason = "原作名とキャラクター名の両方が不一致"
             elif not original_match:
-                match_reason = f"原作名が不一致（OpenAI: '{grok_original}' vs Sheet: '{sheet_original_work}'）"
+                match_reason = f"原作名が不一致（Grok: '{grok_original}' vs Sheet: '{sheet_original_work}'）"
             else:
-                match_reason = f"キャラクター名が不一致（OpenAI: {grok_characters} vs Sheet: '{sheet_character}'）"
+                match_reason = f"キャラクター名が不一致（Grok: {grok_characters} vs Sheet: '{sheet_character}'）"
     
     print(f"Debug: 照合結果 - 一致: {is_match}, 理由: {match_reason}")
     
@@ -1754,64 +1751,6 @@ def build_validation_result(original_match, character_match, grok_original, grok
         'match_reason': match_reason
     }
 
-async def call_openai_api_with_images(prompt, image_urls, max_tokens=600):
-    """
-    OpenAI API（GPT-4V）を画像付きで呼び出す関数
-    """
-    if not OPENAI_API_KEY:
-        print("Warning: OPENAI_API_KEY が設定されていません。元のテキストを返します。")
-        return None
-    
-    headers = {
-        'Authorization': f'Bearer {OPENAI_API_KEY}',
-        'Content-Type': 'application/json'
-    }
-    
-    # 画像URLを最大5枚に制限
-    limited_images = image_urls[:5] if image_urls else []
-    
-    # メッセージコンテンツを構築
-    content = [{"type": "text", "text": prompt}]
-    
-    # 画像を追加（最大5枚、女性の顔のみという指示をプロンプトに含める）
-    for i, img_url in enumerate(limited_images):
-        content.append({
-            "type": "image_url",
-            "image_url": {"url": img_url}
-        })
-        print(f"Debug: 顔画像 {i+1}/{len(limited_images)} をOpenAI APIに送信: {img_url[:50]}...")
-    
-    data = {
-        'model': 'gpt-4o',  # GPT-4 Omni（画像対応）
-        'messages': [
-            {
-                'role': 'user',
-                'content': content
-            }
-        ],
-        'max_tokens': max_tokens,
-        'temperature': 0.7
-    }
-    
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                'https://api.openai.com/v1/chat/completions',
-                headers=headers,
-                json=data,
-                timeout=aiohttp.ClientTimeout(total=60)  # 画像処理のため60秒に延長
-            ) as response:
-                if response.status == 200:
-                    result = await response.json()
-                    print(f"Debug: OpenAI API（画像付き）レスポンス成功 - {len(limited_images)}枚の画像を分析")
-                    return result['choices'][0]['message']['content'].strip()
-                else:
-                    error_text = await response.text()
-                    print(f"OpenAI API Error {response.status}: {error_text}")
-                    return None
-    except Exception as e:
-        print(f"OpenAI API（画像付き）呼び出しエラー: {str(e)}")
-        return None
 
 async def main():
     # グローバル変数の宣言と初期化
@@ -1990,7 +1929,7 @@ def extract_info_from_text_response(text_response):
     JSON形式以外のテキスト応答から原作名とキャラクター名を抽出する
     
     Args:
-        text_response: OpenAI APIからのテキスト応答
+        text_response: AI APIからのテキスト応答
     
     Returns:
         dict: 抽出された情報
