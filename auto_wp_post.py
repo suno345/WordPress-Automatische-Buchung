@@ -10,7 +10,7 @@ import aiohttp
 import json
 from src.utils import fanza_scraper
 from src.core.spreadsheet.manager import SpreadsheetManager
-from src.core.wordpress.poster import WordPress_Poster
+from src.core.wordpress.poster import WordPressPoster
 from src.core.utils.character_validator import CharacterValidator
 from src.core.utils.pre_filter import PreFilter
 import re # 正規表現モジュールのインポート
@@ -885,7 +885,7 @@ async def process_product(ss, row_idx, row, url):
         # URLから商品IDを抽出
         product_id = extract_product_id_from_url(url)
         if product_id:
-            wp_poster = WordPress_Poster(WP_URL, WP_USERNAME, WP_APP_PASSWORD)
+            wp_poster = WordPressPoster(WP_URL, WP_USERNAME, WP_APP_PASSWORD)
             
             # スラッグ（商品ID）で既存投稿をチェック
             existing_post = await wp_poster.check_existing_post_by_slug(product_id)
@@ -1136,7 +1136,7 @@ async def process_product(ss, row_idx, row, url):
                 print(f"Debug: スプレッドシート最終予約時間: {sheet_last_time}")
             
             # WordPressの最終予約投稿時間を取得
-            wp_poster = WordPress_Poster(WP_URL, WP_USERNAME, WP_APP_PASSWORD)
+            wp_poster = WordPressPoster(WP_URL, WP_USERNAME, WP_APP_PASSWORD)
             wp_last_time = await wp_poster.get_last_scheduled_post_time()
             if wp_last_time:
                 # WordPressの時間をJSTに変換
@@ -1224,7 +1224,7 @@ async def process_product(ss, row_idx, row, url):
         if main_image:
             print(f"🖼️  アイキャッチ画像の事前アップロード開始 - URL: {main_image}")
             try:
-                wp_poster = WordPress_Poster(WP_URL, WP_USERNAME, WP_APP_PASSWORD)
+                wp_poster = WordPressPoster(WP_URL, WP_USERNAME, WP_APP_PASSWORD)
                 featured_media_id = await wp_poster.upload_media_from_url(main_image, f"featured_{hash(url) % 10000}.jpg")
                 if featured_media_id:
                     print(f"✅ アイキャッチ画像アップロード成功 - Media ID: {featured_media_id}")
@@ -1294,7 +1294,7 @@ async def process_product(ss, row_idx, row, url):
             raise ValueError(error_message)
         
         if not wp_poster:
-            wp_poster = WordPress_Poster(WP_URL, WP_USERNAME, WP_APP_PASSWORD)
+            wp_poster = WordPressPoster(WP_URL, WP_USERNAME, WP_APP_PASSWORD)
         post_response = await wp_poster.create_post(post_data)
 
         if post_response and 'id' in post_response:
