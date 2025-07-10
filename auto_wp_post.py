@@ -830,7 +830,8 @@ def generate_article_content(details, main_image, gallery_images, url, grok_desc
     
     # テーブルHTML生成（最低3行必要）
     if len(table_rows) < 3:
-        table_rows.append(f'<tr><th class="has-text-align-center" data-align="center">ジャンル</th><td>{'、'.join(details.get("genres", ["不明"]))}</td></tr>')
+        genres_text = '、'.join(details.get("genres", ["不明"]))
+        table_rows.append(f'<tr><th class="has-text-align-center" data-align="center">ジャンル</th><td>{genres_text}</td></tr>')
     
     info_table = f'<!-- wp:table {{"className":"is-style-regular"}} -->\n<figure class="wp-block-table is-style-regular"><table><tbody>\n{chr(10).join(table_rows)}\n</tbody></table></figure>\n<!-- /wp:table -->'
 
