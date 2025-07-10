@@ -1158,7 +1158,7 @@ async def process_product(ss, row_idx, row, url):
             
             # WordPressの最終予約投稿時間を取得
             wp_poster = WordPressPoster(WP_URL, WP_USERNAME, WP_APP_PASSWORD)
-            wp_last_time = await wp_poster.get_last_scheduled_post_time()
+            wp_last_time = wp_poster.get_last_scheduled_post_time()
             if wp_last_time:
                 # WordPressの時間をJSTに変換
                 wp_last_time_jst = wp_last_time.replace(tzinfo=None) + timedelta(hours=9)
@@ -1324,7 +1324,8 @@ async def process_product(ss, row_idx, row, url):
             categories=post_data.get('categories', []),
             tags=post_data.get('tags', []),
             featured_media=post_data.get('featured_media_id'),
-            status=post_data['status']
+            status=post_data['status'],
+            date=post_data.get('date') if post_data['status'] == 'future' else None
         )
 
         if post_response and 'id' in post_response:

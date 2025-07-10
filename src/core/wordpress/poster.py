@@ -13,19 +13,26 @@ class WordPressPoster:
     def __init__(self, wp_url: str, wp_username: str, wp_password: str):
         self.logger = get_logger(__name__)
         self.config = ConfigManager()
-        self.wp_url = wp_url
+        # URLの末尾のスラッシュを除去
+        self.wp_url = wp_url.rstrip('/')
         self.wp_username = wp_username
         self.wp_password = wp_password
-        self.api_url = f"{wp_url}/wp-json/wp/v2"
+        self.api_url = f"{self.wp_url}/wp-json/wp/v2"
         self.session = requests.Session()
         self.session.auth = (self.wp_username, self.wp_password)
 
-    def create_post(self, title: str, content: str, categories: List[int] = None, tags: List[int] = None, featured_media: int = None, status: str = 'publish') -> Dict[str, Any]:
+    def create_post(self, title: str, content: str, categories: List[int] = None, tags: List[int] = None, featured_media: int = None, status: str = 'publish', date: str = None) -> Dict[str, Any]:
         """投稿の作成"""
+        # カテゴリとタグが文字列のリストの場合、IDに変換
+        if categories and isinstance(categories, list) and len(categories) > 0 and isinstance(categories[0], str):
+            categories = self.convert_categories_to_ids(categories)
+        if tags and isinstance(tags, list) and len(tags) > 0 and isinstance(tags[0], str):
+            tags = self.convert_tags_to_ids(tags)
+        
         data = {
             'title': title,
             'content': content,
-            'status': status  # publish（公開）またはdraft（下書き）
+            'status': status  # publish（公開）またはdraft（下書き）またはfuture（予約投稿）
         }
         if categories:
             data['categories'] = categories
@@ -33,6 +40,10 @@ class WordPressPoster:
             data['tags'] = tags
         if featured_media:
             data['featured_media'] = featured_media
+        if date and status == 'future':
+            # 予約投稿の場合は日時を設定
+            data['date'] = date
+            data['date_gmt'] = date  # GMT時間も設定
 
         response = self.session.post(f"{self.api_url}/posts", json=data)
         response.raise_for_status()
@@ -252,6 +263,36 @@ class WordPressPoster:
             return {'post_id': result.get('id'), 'url': result.get('link')}
         except Exception as e:
             self.logger.error(f"予約投稿エラー: {str(e)}")
+            return None
+    
+    def get_last_scheduled_post_time(self) -> Optional[datetime]:
+        """最後の予約投稿の時間を取得"""
+        try:
+            # 予約投稿（future）ステータスの投稿を取得
+            response = self.session.get(
+                f"{self.api_url}/posts",
+                params={
+                    'status': 'future',
+                    'orderby': 'date',
+                    'order': 'desc',
+                    'per_page': 1
+                }
+            )
+            response.raise_for_status()
+            posts = response.json()
+            
+            if posts:
+                # WordPressの日時文字列をdatetimeオブジェクトに変換
+                date_str = posts[0].get('date_gmt', posts[0].get('date'))
+                if date_str:
+                    # ISO 8601形式の日時をパース
+                    from datetime import datetime
+                    return datetime.strptime(date_str, '%Y-%m-%dT%H:%M:%S')
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"予約投稿時間取得エラー: {str(e)}")
             return None
 
 if __name__ == '__main__':
