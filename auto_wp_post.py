@@ -16,6 +16,57 @@ from src.core.utils.pre_filter import PreFilter
 import re # 正規表現モジュールのインポート
 from urllib.parse import quote
 
+def clean_title(title):
+    """タイトルから不適切な文字を除去"""
+    if not title:
+        return ""
+    
+    # 不要な文字列を除去
+    title = re.sub(r'\.pdf$', '', title)  # .pdf拡張子を除去
+    title = re.sub(r'_ 無料.*?マンガ', '', title)  # _ 無料18禁マンガ等を除去
+    title = re.sub(r'_ 無料.*', '', title)  # _ 無料で始まる文字列を除去
+    title = re.sub(r'\s+', ' ', title)  # 連続する空白を単一空白に
+    title = title.strip()  # 前後の空白を除去
+    
+    return title
+
+def validate_product_data(details):
+    """商品データの品質チェック"""
+    errors = []
+    warnings = []
+    
+    # 必須フィールドチェック
+    required_fields = ['title', 'description', 'author_name', 'circle_name']
+    for field in required_fields:
+        if not details.get(field):
+            errors.append(f"必須フィールド '{field}' が空です")
+    
+    # 画像データチェック
+    if not details.get('main_image_url'):
+        errors.append("メイン画像URLが取得できていません")
+    
+    if not details.get('sample_images') or len(details.get('sample_images', [])) == 0:
+        warnings.append("サンプル画像が取得できていません")
+    
+    # 価格情報チェック
+    if not details.get('price'):
+        warnings.append("価格情報が取得できていません")
+    
+    # 作品形式チェック
+    if not details.get('product_format'):
+        warnings.append("作品形式が取得できていません")
+    
+    # ページ数チェック
+    if not details.get('page_count'):
+        warnings.append("ページ数が取得できていません")
+    
+    return {
+        'is_valid': len(errors) == 0,
+        'errors': errors,
+        'warnings': warnings,
+        'quality_score': max(0, 100 - len(errors) * 25 - len(warnings) * 5)
+    }
+
 def generate_free_reading_section(title, original_work='', character_name=''):
     """無料で読める？セクションを生成（SEO強化版）"""
     
@@ -739,6 +790,11 @@ def generate_article_content(details, main_image, gallery_images, url, grok_desc
     if product_id:
         table_rows.append(f'<tr><th class="has-text-align-center" data-align="center">品番</th><td>{product_id}</td></tr>')
     
+    # サークル名（優先表示）
+    if circle_name:
+        circle_link = f'<a href="/circle_name/{quote(circle_name)}/">{circle_name}</a>'
+        table_rows.append(f'<tr><th class="has-text-align-center" data-align="center">サークル名</th><td>{circle_link}</td></tr>')
+    
     # 作者名（常に表示）
     if author_name:
         author_link = f'<a href="/tag/{quote(author_name)}/">{author_name}</a>'
@@ -759,11 +815,23 @@ def generate_article_content(details, main_image, gallery_images, url, grok_desc
         format_link = f'<a href="/product_format/{quote(product_format)}/">{product_format}</a>'
         table_rows.append(f'<tr><th class="has-text-align-center" data-align="center">作品形式</th><td>{format_link}</td></tr>')
     
+    # 価格（新規追加）
+    if details.get('price'):
+        price_display = f"{details['price']}円"
+        table_rows.append(f'<tr><th class="has-text-align-center" data-align="center">価格</th><td>{price_display}</td></tr>')
+    
     # ページ数（常に表示）
     page_display = f'{page_count}ページ' if page_count else '不明'
     table_rows.append(f'<tr><th class="has-text-align-center" data-align="center">ページ数</th><td>{page_display}</td></tr>')
     
-    # テーブルHTML生成
+    # 販売日（新規追加）
+    if details.get('sale_date'):
+        table_rows.append(f'<tr><th class="has-text-align-center" data-align="center">販売日</th><td>{details["sale_date"]}</td></tr>')
+    
+    # テーブルHTML生成（最低3行必要）
+    if len(table_rows) < 3:
+        table_rows.append(f'<tr><th class="has-text-align-center" data-align="center">ジャンル</th><td>{'、'.join(details.get("genres", ["不明"]))}</td></tr>')
+    
     info_table = f'<!-- wp:table {{"className":"is-style-regular"}} -->\n<figure class="wp-block-table is-style-regular"><table><tbody>\n{chr(10).join(table_rows)}\n</tbody></table></figure>\n<!-- /wp:table -->'
 
     # 無料で読める？セクションの生成（SEO強化版）
@@ -853,6 +921,30 @@ async def process_product(ss, row_idx, row, url):
         
         # 詳細情報取得（スプレッドシートの情報も渡す）
         details = await fanza_scraper.scrape_fanza_product_details(url, sheet_original_work, sheet_character)
+        
+        # 商品データの品質チェック
+        validation_result_data = validate_product_data(details)
+        print(f"📊 データ品質チェック結果:")
+        print(f"   品質スコア: {validation_result_data['quality_score']}%")
+        print(f"   エラー: {len(validation_result_data['errors'])}件")
+        print(f"   警告: {len(validation_result_data['warnings'])}件")
+        
+        # エラーがある場合は詳細ログを出力
+        if validation_result_data['errors']:
+            print(f"❌ データ品質エラー:")
+            for error in validation_result_data['errors']:
+                print(f"   - {error}")
+        
+        if validation_result_data['warnings']:
+            print(f"⚠️  データ品質警告:")
+            for warning in validation_result_data['warnings']:
+                print(f"   - {warning}")
+        
+        # 重大なエラーがある場合は処理を中断
+        if not validation_result_data['is_valid']:
+            print(f"❌ 商品データが不完全なため処理を中断します")
+            ss.update_cell(row_idx, 1, '❌データ不完全')
+            return
         
         # 【重要】事前フィルタリングによる原作相違・キャラクター相違チェック
         excluded_by_prefilter = False
@@ -1141,13 +1233,13 @@ async def process_product(ss, row_idx, row, url):
                 print(f"⚠️  アイキャッチ画像アップロード中にエラー: {str(e)}")
 
         # 記事タイトルの生成（商品名【キャラ名】形式）
-        article_title = details['title']  # デフォルトは商品名
+        article_title = clean_title(details['title'])  # タイトルをクリーニング
         
         # キャラクター名が特定できている場合は【キャラ名】を追加
         if character_taxonomy and not is_unknown_work_or_character:
             # 複数キャラクターの場合は最初のキャラクター名のみ使用
             first_character = validation_result['validated_characters'][0] if validation_result['validated_characters'] else character_taxonomy.split(',')[0].strip()
-            article_title = f"{details['title']}【{first_character}】"
+            article_title = f"{clean_title(details['title'])}【{first_character}】"
             print(f"📝 記事タイトル生成: {article_title}")
         else:
             print(f"📝 記事タイトル（キャラ名なし）: {article_title}")
@@ -1164,6 +1256,30 @@ async def process_product(ss, row_idx, row, url):
             'custom_taxonomies': custom_taxonomies,  # 原作・キャラが特定できた場合のみ設定
             'featured_media_id': featured_media_id  # アイキャッチ画像IDを追加
         }
+        
+        # 投稿データの詳細ログ
+        print(f"📋 WordPress投稿データ詳細:")
+        print(f"   タイトル: {article_title}")
+        print(f"   投稿ステータス: {post_status}")
+        print(f"   投稿日時: {wordpress_date}")
+        print(f"   品番（スラッグ）: {product_id}")
+        print(f"   カテゴリ数: {len(categories)}")
+        print(f"   タグ数: {len(tags)}")
+        print(f"   カスタムタクソノミー: {list(custom_taxonomies.keys())}")
+        print(f"   アイキャッチ画像ID: {featured_media_id}")
+        print(f"   コンテンツ長: {len(article_content)}文字")
+        
+        # コンテンツの構成要素チェック
+        content_elements = []
+        if 'wp:image' in article_content:
+            content_elements.append('画像')
+        if 'wp:table' in article_content:
+            content_elements.append('テーブル')
+        if 'wp:button' in article_content:
+            content_elements.append('ボタン')
+        if 'wp:heading' in article_content:
+            content_elements.append('見出し')
+        print(f"   コンテンツ構成要素: {', '.join(content_elements) if content_elements else 'なし'}")
 
         # WordPressに投稿
         print(f"Debug: WordPress認証情報確認")
