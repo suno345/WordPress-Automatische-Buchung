@@ -169,9 +169,9 @@ async def scrape_fanza_product_details(url, sheet_original_work=None, sheet_char
             title = clean_title(item.get('title', ''))
             description = item.get('comment', '') or ''  # APIのcommentフィールドから商品説明を取得
             
-            # 商品説明が取得できない場合はスクレイピングで補完
+            # 商品説明が取得できない場合はハイブリッドスクレイピングで補完
             if not description:
-                description = await scrape_product_description(url)
+                description = await scrape_product_description_hybrid(url)
             
             # スクレイピングでも取得できない場合はAIで生成
             if not description:
@@ -916,4 +916,268 @@ def generate_description_from_metadata(product_data: dict) -> str:
         print(f"Error: AI説明文生成中にエラー: {str(e)}")
         # エラー時のフォールバック
         title = product_data.get('title', '商品名不明')
-        return f"「{title}」の同人作品です。詳細は商品ページをご確認ください。" 
+        return f"「{title}」の同人作品です。詳細は商品ページをご確認ください。"
+
+# リソース管理クラス
+class PlaywrightResourceManager:
+    """
+    Playwrightのリソース管理を行うクラス
+    VPS環境での効率的なブラウザ管理を実現
+    """
+    
+    def __init__(self):
+        self.playwright = None
+        self.browser = None
+        self.context = None
+        self.session_count = 0
+        self.max_sessions = 10  # 10回使用後にリセット
+    
+    async def initialize(self):
+        """ブラウザセッションの初期化"""
+        try:
+            if not self.playwright:
+                from playwright.async_api import async_playwright
+                self.playwright = await async_playwright().start()
+            
+            if not self.browser:
+                self.browser = await self.playwright.chromium.launch(
+                    headless=True,
+                    args=[
+                        # VPS最適化設定
+                        '--no-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--disable-gpu',
+                        '--memory-pressure-off',
+                        '--max_old_space_size=512',  # メモリ制限をより厳しく
+                        '--disable-background-timer-throttling',
+                        '--disable-backgrounding-occluded-windows',
+                        '--disable-renderer-backgrounding',
+                        '--disable-features=TranslateUI,BlinkGenPropertyTrees,VizDisplayCompositor',
+                        '--disable-extensions',
+                        '--disable-plugins',
+                        '--disable-default-apps',
+                        '--disable-sync',
+                        '--disable-background-networking',
+                        '--disable-component-update',
+                        '--single-process',
+                        '--no-zygote',
+                        '--disable-breakpad'
+                    ]
+                )
+            
+            if not self.context:
+                self.context = await self.browser.new_context(
+                    user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                )
+            
+            print(f"Debug: PlaywrightResourceManager初期化完了")
+            
+        except Exception as e:
+            print(f"Debug: PlaywrightResourceManager初期化エラー: {str(e)}")
+            raise
+    
+    async def get_page(self):
+        """新しいページを取得"""
+        await self.initialize()
+        page = await self.context.new_page()
+        
+        # 基本設定
+        page.set_default_timeout(15000)  # 15秒に短縮
+        await page.add_init_script("window.localStorage.setItem('age_check_done', '1')")
+        
+        self.session_count += 1
+        
+        # セッション数が上限に達したらリセット
+        if self.session_count >= self.max_sessions:
+            print(f"Debug: セッション上限到達、リソースをリセット中...")
+            await self.reset()
+        
+        return page
+    
+    async def reset(self):
+        """リソースのリセット"""
+        try:
+            if self.context:
+                await self.context.close()
+                self.context = None
+            
+            if self.browser:
+                await self.browser.close()
+                self.browser = None
+            
+            self.session_count = 0
+            print(f"Debug: PlaywrightResourceManagerリセット完了")
+            
+        except Exception as e:
+            print(f"Debug: PlaywrightResourceManagerリセットエラー: {str(e)}")
+    
+    async def cleanup(self):
+        """完全なクリーンアップ"""
+        try:
+            await self.reset()
+            
+            if self.playwright:
+                await self.playwright.stop()
+                self.playwright = None
+            
+            print(f"Debug: PlaywrightResourceManager完全クリーンアップ完了")
+            
+        except Exception as e:
+            print(f"Debug: PlaywrightResourceManagerクリーンアップエラー: {str(e)}")
+
+# グローバルリソースマネージャー
+_resource_manager = None
+
+async def get_resource_manager():
+    """グローバルリソースマネージャーを取得"""
+    global _resource_manager
+    if _resource_manager is None:
+        _resource_manager = PlaywrightResourceManager()
+    return _resource_manager
+
+# Playwright統合機能
+async def scrape_product_description_with_playwright(url: str) -> str:
+    """
+    Playwrightを使用した商品説明取得（VPS最適化版）
+    
+    Args:
+        url: 商品ページのURL
+        
+    Returns:
+        商品説明（取得できない場合は空文字列）
+    """
+    try:
+        print(f"Debug: Playwright最適化版実行開始 - URL: {url}")
+        
+        # リソースマネージャーを取得
+        manager = await get_resource_manager()
+        page = await manager.get_page()
+        
+        try:
+            # ページにアクセス
+            try:
+                await page.goto(url, wait_until='domcontentloaded', timeout=15000)
+                print(f"Debug: Playwrightページアクセス成功")
+                # 追加で少し待機（JavaScript実行のため）
+                await page.wait_for_timeout(2000)
+            except Exception as e:
+                print(f"Debug: Playwrightページアクセス失敗: {str(e)}")
+                await page.close()
+                return ""
+            
+            # 商品説明を複数の方法で取得
+            description = ""
+            
+            # 方法1: 基本セレクタ（高速）
+            basic_selectors = [
+                '.mg-b20.lh4',
+                '.productDetail__txt'
+            ]
+            
+            for selector in basic_selectors:
+                try:
+                    element = await page.wait_for_selector(selector, timeout=2000)
+                    if element:
+                        description = await element.inner_text()
+                        if validate_description_quality(description):
+                            print(f"Debug: Playwright基本取得成功 (セレクタ: {selector})")
+                            break
+                except:
+                    continue
+            
+            # 方法2: 拡張セレクタ（中速）
+            if not description:
+                extended_selectors = [
+                    'div[class*="mg-b20"]',
+                    'div[class*="productDetail"]',
+                    'div[class*="description"]',
+                    'p[class*="description"]'
+                ]
+                
+                for selector in extended_selectors:
+                    try:
+                        element = await page.wait_for_selector(selector, timeout=1500)
+                        if element:
+                            description = await element.inner_text()
+                            if validate_description_quality(description):
+                                print(f"Debug: Playwright拡張取得成功 (セレクタ: {selector})")
+                                break
+                    except:
+                        continue
+            
+            # 方法3: JavaScript実行（低速だが確実）
+            if not description:
+                try:
+                    description = await page.evaluate("""
+                        () => {
+                            const elements = document.querySelectorAll('p, div');
+                            for (let elem of elements) {
+                                const text = elem.textContent.trim();
+                                if (text.length > 20 && 
+                                    (text.includes('作品') || text.includes('内容') || 
+                                     text.includes('ストーリー') || text.includes('物語'))) {
+                                    return text;
+                                }
+                            }
+                            return '';
+                        }
+                    """)
+                    
+                    if validate_description_quality(description):
+                        print("Debug: PlaywrightJS実行取得成功")
+                except Exception as e:
+                    print(f"Debug: PlaywrightJS実行失敗: {str(e)}")
+            
+            # ページを閉じる
+            await page.close()
+            
+            if description:
+                cleaned_description = clean_description(description)
+                print(f"Debug: Playwright最適化版取得成功 - {cleaned_description[:50]}...")
+                return cleaned_description
+            else:
+                print("Debug: Playwright最適化版全方法で取得失敗")
+                return ""
+                
+        except Exception as e:
+            await page.close()
+            print(f"Debug: Playwrightページ処理エラー: {str(e)}")
+            return ""
+            
+    except ImportError:
+        print("Debug: Playwrightがインストールされていません")
+        return ""
+    except Exception as e:
+        print(f"Debug: Playwright最適化版実行エラー: {str(e)}")
+        return ""
+
+async def scrape_product_description_hybrid(url: str) -> str:
+    """
+    ハイブリッドモード: 従来のスクレイピング → Playwright の順で試行
+    
+    Args:
+        url: 商品ページのURL
+        
+    Returns:
+        商品説明（取得できない場合は空文字列）
+    """
+    # まず従来のスクレイピングを試行
+    print(f"Debug: ハイブリッドモード開始 - 従来のスクレイピングを試行")
+    description = await scrape_product_description(url)
+    
+    # 従来の方法で成功した場合
+    if description and validate_description_quality(description):
+        print(f"Debug: 従来のスクレイピングで成功 - {description[:50]}...")
+        return description
+    
+    # 従来の方法で失敗した場合はPlaywrightを試行
+    print(f"Debug: 従来のスクレイピング失敗、Playwrightフォールバックを実行")
+    playwright_description = await scrape_product_description_with_playwright(url)
+    
+    if playwright_description and validate_description_quality(playwright_description):
+        print(f"Debug: Playwrightフォールバックで成功 - {playwright_description[:50]}...")
+        return playwright_description
+    
+    # 両方失敗した場合
+    print(f"Debug: 両方の方法で失敗、空文字列を返却")
+    return "" 
