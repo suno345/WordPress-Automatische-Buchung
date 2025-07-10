@@ -173,6 +173,17 @@ async def scrape_fanza_product_details(url, sheet_original_work=None, sheet_char
             if not description:
                 description = await scrape_product_description(url)
             
+            # スクレイピングでも取得できない場合はAIで生成
+            if not description:
+                description = generate_description_from_metadata({
+                    'title': title,
+                    'genres': [genre.get('name', '') for genre in iteminfo.get('genre', []) if isinstance(genre, dict)],
+                    'circle_name': get_first_item_name(iteminfo.get('maker', [])),
+                    'author_name': get_first_item_name(iteminfo.get('author', [])),
+                    'product_format': get_first_item_name(iteminfo.get('type', [])),
+                    'page_count': item.get('volume', '')
+                })
+            
             # 商品詳細情報の取得
             iteminfo = item.get('iteminfo', {})
 
@@ -649,7 +660,7 @@ async def scrape_product_format(url: str) -> str:
 
 async def scrape_product_description(url: str) -> str:
     """
-    商品ページから商品説明をスクレイピングで取得
+    商品ページから商品説明をスクレイピングで取得（改善版）
     
     Args:
         url: 商品ページのURL
@@ -659,11 +670,16 @@ async def scrape_product_description(url: str) -> str:
     """
     try:
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36",
-            "Cookie": "age_check_done=1"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Cookie": "age_check_done=1",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1"
         }
         
-        timeout = aiohttp.ClientTimeout(total=10)
+        timeout = aiohttp.ClientTimeout(total=15)
         
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(url, headers=headers) as response:
@@ -671,23 +687,79 @@ async def scrape_product_description(url: str) -> str:
                     html = await response.text()
                     soup = BeautifulSoup(html, 'html.parser')
                     
-                    # 商品説明の取得（複数のセレクタを試行）
+                    # 商品説明の取得（拡張されたセレクタを試行）
                     description_selectors = [
-                        '.mg-b20.lh4',  # 一般的な商品説明
-                        '.productDetail__txt',  # 新しいレイアウト
-                        '.product-detail-description',  # 別のレイアウト
-                        '.item-description',  # 汎用的なセレクタ
-                        'div[class*="description"]',  # クラス名に"description"を含む要素
-                        'p[class*="detail"]'  # クラス名に"detail"を含むp要素
+                        # 現在のセレクタ（優先度高）
+                        '.mg-b20.lh4',
+                        '.productDetail__txt',
+                        '.product-detail-description',
+                        '.item-description',
+                        
+                        # 汎用的セレクタ（中優先度）
+                        'div[class*="mg-b20"]',
+                        'div[class*="productDetail"]',
+                        'div[class*="description"]',
+                        'div[class*="detail"]',
+                        'div[class*="comment"]',
+                        'div[class*="intro"]',
+                        'div[class*="summary"]',
+                        
+                        # 要素タイプ別セレクタ
+                        'p[class*="description"]',
+                        'p[class*="detail"]',
+                        'p[class*="intro"]',
+                        'p[class*="comment"]',
+                        
+                        # 構造的セレクタ
+                        '.product-info p',
+                        '.product-content p',
+                        '.item-info p',
+                        '.work-info p',
+                        '.content-area p',
+                        '.main-content p',
+                        
+                        # 属性ベースセレクタ
+                        '[data-description]',
+                        '[data-detail]',
+                        '[data-comment]',
+                        '[data-content]',
+                        
+                        # 緊急時フォールバック
+                        'div p',
+                        'section p',
+                        'article p'
                     ]
                     
+                    # 各セレクタを試行
                     for selector in description_selectors:
-                        description_elem = soup.select_one(selector)
-                        if description_elem:
-                            description = description_elem.get_text(strip=True)
-                            if description and len(description) > 20:  # 最低20文字以上
-                                print(f"Debug: 商品説明をスクレイピングで取得: {description[:50]}...")
-                                return description
+                        try:
+                            description_elem = soup.select_one(selector)
+                            if description_elem:
+                                description = description_elem.get_text(strip=True)
+                                if validate_description_quality(description):
+                                    cleaned_description = clean_description(description)
+                                    print(f"Debug: 商品説明取得成功 (セレクタ: {selector}) - {cleaned_description[:50]}...")
+                                    return cleaned_description
+                        except Exception as e:
+                            print(f"Debug: セレクタ {selector} でエラー: {str(e)}")
+                            continue
+                    
+                    # テキストパターンベースのフォールバック
+                    print(f"Debug: CSS選択できない場合のキーワード検索を開始")
+                    keywords = ['作品内容', 'あらすじ', '内容紹介', '商品説明', 'ストーリー', '概要']
+                    for keyword in keywords:
+                        try:
+                            elements = soup.find_all(text=re.compile(keyword))
+                            for elem in elements:
+                                if elem.parent:
+                                    description = elem.parent.get_text(strip=True)
+                                    if validate_description_quality(description):
+                                        cleaned_description = clean_description(description)
+                                        print(f"Debug: キーワード検索で説明文取得成功 ({keyword}) - {cleaned_description[:50]}...")
+                                        return cleaned_description
+                        except Exception as e:
+                            print(f"Debug: キーワード '{keyword}' でエラー: {str(e)}")
+                            continue
                     
                     print(f"Warning: 商品説明をスクレイピングで取得できませんでした: {url}")
                     return ""
@@ -697,4 +769,151 @@ async def scrape_product_description(url: str) -> str:
                     
     except Exception as e:
         print(f"Error: 商品説明のスクレイピング中にエラー: {str(e)}")
-        return "" 
+        return ""
+
+def validate_description_quality(description: str) -> bool:
+    """商品説明の品質チェック（改善版）"""
+    if not description:
+        return False
+    
+    # 最低文字数を緩和（20文字→10文字）
+    if len(description) < 10:
+        return False
+    
+    # 意味のないテキストを除外
+    meaningless_patterns = [
+        r'^[0-9\s\-\.\,]+$',  # 数字と記号のみ
+        r'^[★☆\s]+$',        # 星記号のみ
+        r'^[\.]{3,}$',        # 省略記号のみ
+        r'^[・\s]+$',         # 中点のみ
+        r'^[×\s]+$',         # ×記号のみ
+    ]
+    
+    for pattern in meaningless_patterns:
+        if re.match(pattern, description):
+            return False
+    
+    # 除外すべきテキスト
+    exclude_phrases = [
+        'JavaScript', 'Cookie', 'お問い合わせ', 'FAQ', 
+        'プライバシーポリシー', '利用規約', '著作権',
+        'Copyright', 'All Rights Reserved'
+    ]
+    
+    for phrase in exclude_phrases:
+        if phrase in description:
+            return False
+    
+    # 有効な説明文の特徴をチェック
+    positive_indicators = [
+        '作品', '内容', 'ストーリー', 'キャラクター', 
+        'シナリオ', 'イラスト', 'CG', 'ゲーム', 'マンガ',
+        '物語', '設定', '世界観', '登場人物', '主人公'
+    ]
+    
+    if any(indicator in description for indicator in positive_indicators):
+        return True
+    
+    # 長さによる判定（30文字以上なら有効とみなす）
+    if len(description) >= 30:
+        return True
+    
+    return False
+
+def clean_description(description: str) -> str:
+    """商品説明のクリーンアップ"""
+    if not description:
+        return description
+    
+    # 不要な文字列を除去
+    description = re.sub(r'※.*?(?=\n|$)', '', description)  # 注意書き
+    description = re.sub(r'【.*?】', '', description)        # 角括弧内の文字
+    description = re.sub(r'■.*?(?=\n|$)', '', description)  # 見出し記号
+    description = re.sub(r'★.*?(?=\n|$)', '', description)  # 星記号
+    description = re.sub(r'◆.*?(?=\n|$)', '', description)  # ダイヤ記号
+    description = re.sub(r'\s+', ' ', description)          # 連続する空白を単一化
+    
+    # 先頭・末尾の空白を除去
+    description = description.strip()
+    
+    # 最大文字数制限（必要に応じて）
+    max_length = 500
+    if len(description) > max_length:
+        description = description[:max_length] + "..."
+    
+    return description
+
+def generate_description_from_metadata(product_data: dict) -> str:
+    """
+    商品メタデータからAIが説明文を生成
+    
+    Args:
+        product_data: 商品データの辞書
+        
+    Returns:
+        生成された説明文
+    """
+    try:
+        # 基本情報の取得
+        title = product_data.get('title', '')
+        genres = product_data.get('genres', [])
+        circle_name = product_data.get('circle_name', '')
+        author_name = product_data.get('author_name', '')
+        product_format = product_data.get('product_format', '')
+        page_count = product_data.get('page_count', '')
+        
+        # 説明文の構築
+        description_parts = []
+        
+        # 基本紹介
+        if title:
+            description_parts.append(f"「{title}」")
+        
+        # ジャンル情報
+        if genres:
+            # 有効なジャンルのみフィルタリング
+            valid_genres = [g for g in genres if g and g.strip()]
+            if valid_genres:
+                genre_text = "、".join(valid_genres[:3])  # 最初の3つのジャンル
+                description_parts.append(f"は{genre_text}ジャンルの同人作品です。")
+            else:
+                description_parts.append("は同人作品です。")
+        else:
+            description_parts.append("は同人作品です。")
+        
+        # サークル・作者情報
+        if circle_name:
+            description_parts.append(f"サークル「{circle_name}」")
+            if author_name and author_name != circle_name:
+                description_parts.append(f"（作者：{author_name}）")
+            description_parts.append("により制作されました。")
+        elif author_name:
+            description_parts.append(f"作者「{author_name}」による作品です。")
+        
+        # 作品形式・ページ数
+        format_info = []
+        if product_format:
+            format_info.append(f"作品形式：{product_format}")
+        if page_count:
+            format_info.append(f"ページ数：{page_count}")
+        
+        if format_info:
+            description_parts.append(" ".join(format_info) + "。")
+        
+        # 魅力的な結び
+        if genres:
+            description_parts.append("魅力的な内容で多くの読者に愛されている作品です。")
+        else:
+            description_parts.append("詳細な内容については商品ページをご確認ください。")
+        
+        # 説明文の組み立て
+        description = "".join(description_parts)
+        
+        print(f"Debug: AI生成説明文: {description[:50]}...")
+        return description
+        
+    except Exception as e:
+        print(f"Error: AI説明文生成中にエラー: {str(e)}")
+        # エラー時のフォールバック
+        title = product_data.get('title', '商品名不明')
+        return f"「{title}」の同人作品です。詳細は商品ページをご確認ください。" 

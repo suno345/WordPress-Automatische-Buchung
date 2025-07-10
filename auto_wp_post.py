@@ -42,19 +42,25 @@ def clean_title(title):
     return title
 
 def validate_product_data(details):
-    """商品データの品質チェック"""
+    """商品データの品質チェック（改善版）"""
     errors = []
     warnings = []
     
-    # 必須フィールドチェック
-    required_fields = ['title', 'description', 'author_name', 'circle_name']
-    for field in required_fields:
+    # 必須フィールドチェック（description要件を緩和）
+    critical_fields = ['title']  # タイトルのみを必須に
+    for field in critical_fields:
         if not details.get(field):
             errors.append(f"必須フィールド '{field}' が空です")
     
-    # 画像データチェック
+    # 重要フィールドチェック（エラーからワーニングに変更）
+    important_fields = ['description', 'author_name', 'circle_name']
+    for field in important_fields:
+        if not details.get(field):
+            warnings.append(f"重要フィールド '{field}' が空です")
+    
+    # 画像データチェック（エラーからワーニングに変更）
     if not details.get('main_image_url'):
-        errors.append("メイン画像URLが取得できていません")
+        warnings.append("メイン画像URLが取得できていません")
     
     if not details.get('sample_images') or len(details.get('sample_images', [])) == 0:
         warnings.append("サンプル画像が取得できていません")
@@ -71,11 +77,14 @@ def validate_product_data(details):
     if not details.get('page_count'):
         warnings.append("ページ数が取得できていません")
     
+    # 品質スコアの計算（エラーのみ大幅減点、ワーニングは軽微）
+    quality_score = max(0, 100 - len(errors) * 50 - len(warnings) * 3)
+    
     return {
-        'is_valid': len(errors) == 0,
+        'is_valid': len(errors) == 0,  # エラーがなければ有効
         'errors': errors,
         'warnings': warnings,
-        'quality_score': max(0, 100 - len(errors) * 25 - len(warnings) * 5)
+        'quality_score': quality_score
     }
 
 def generate_free_reading_section(title, original_work='', character_name=''):
@@ -953,12 +962,11 @@ async def process_product(ss, row_idx, row, url):
             for warning in validation_result_data['warnings']:
                 print(f"   - {warning}")
         
-        # 重大なエラーがある場合は処理を中断（一時的に緩和）
+        # 重大なエラーがある場合は処理を中断
         if not validation_result_data['is_valid']:
-            print(f"⚠️  商品データが不完全ですが、テスト目的で処理を継続します")
-            print(f"   品質スコア: {validation_result_data['quality_score']}%")
-            # ss.update_cell(row_idx, 1, '❌データ不完全')
-            # return
+            print(f"❌ 商品データが不完全なため処理を中断します")
+            ss.update_cell(row_idx, 1, '❌データ不完全')
+            return
         
         # 【重要】事前フィルタリングによる原作相違・キャラクター相違チェック
         excluded_by_prefilter = False
