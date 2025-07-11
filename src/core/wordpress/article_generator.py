@@ -28,6 +28,9 @@ class WordPressArticleGenerator:
             # カスタムフィールド（meta_input）を生成
             meta_input = self._generate_meta_input(product_info, grok_result)
             
+            # スラッグ（商品ID）を生成
+            slug = self._generate_slug(product_info)
+            
             # 記事データの生成
             article_data = {
                 'title': self._generate_title(product_info, grok_result),
@@ -36,7 +39,8 @@ class WordPressArticleGenerator:
                 'categories': self._get_categories(product_info),
                 'tags': self._get_tags(product_info, grok_result),
                 'custom_taxonomies': self._get_custom_taxonomies(product_info, grok_result),
-                'meta_input': meta_input  # カスタムフィールド追加
+                'meta_input': meta_input,  # カスタムフィールド追加
+                'slug': slug  # スラッグ追加
             }
             
             return article_data
@@ -227,17 +231,17 @@ class WordPressArticleGenerator:
             else:
                 categories.append(product_info['genre'])
         
-        # フォールバック：基本カテゴリ
-        if not categories:
-            categories.append('同人作品')
-        
         # 作品形式もカテゴリに追加
         product_format = product_info.get('product_format', '')
         if product_format and product_format not in categories:
             categories.append(product_format)
         
-        # 重複除去と空文字除去
-        categories = list(set([cat for cat in categories if cat and cat.strip()]))
+        # 「不明」関連を完全除去、重複除去、空文字除去
+        categories = self._clean_data_list(categories)
+        
+        # フォールバック：基本カテゴリ（有効なカテゴリが1つもない場合のみ）
+        if not categories:
+            categories.append('同人作品')
         
         return categories
     
@@ -262,8 +266,8 @@ class WordPressArticleGenerator:
                 if author_name != circle_name:
                     tags.append(author_name)
         
-        # 重複除去と空文字除去
-        tags = list(set([tag for tag in tags if tag and tag.strip()]))
+        # 「不明」関連を完全除去、重複除去、空文字除去
+        tags = self._clean_data_list(tags)
         
         # 商品形式・ページ数はカスタムフィールドで管理（タグには含めない）
         # キャラクター名・原作名もカスタムフィールドで管理（タグには含めない）
@@ -276,12 +280,12 @@ class WordPressArticleGenerator:
         
         # 原作名（複数ソース対応）
         original_work = grok_result.get('original_work', '') or product_info.get('original_work', '')
-        if original_work and original_work.strip():
+        if self._is_valid_data(original_work):
             taxonomies['original_work'] = original_work.strip()
         
         # キャラクター名（複数ソース対応）
         character_name = grok_result.get('character_name', '') or product_info.get('character_name', '')
-        if character_name and character_name.strip():
+        if self._is_valid_data(character_name):
             taxonomies['character_name'] = character_name.strip()
         
         # サークル名（複数フィールド対応）
@@ -292,7 +296,7 @@ class WordPressArticleGenerator:
             elif isinstance(product_info['maker'], str):
                 circle_name = product_info['maker']
         
-        if circle_name and circle_name.strip():
+        if self._is_valid_data(circle_name):
             taxonomies['circle_name'] = circle_name.strip()
         
         # 作者名
@@ -300,17 +304,17 @@ class WordPressArticleGenerator:
         if author_name:
             if isinstance(author_name, list) and author_name:
                 author_name = author_name[0]
-            if isinstance(author_name, str) and author_name.strip():
+            if isinstance(author_name, str) and self._is_valid_data(author_name):
                 taxonomies['author_name'] = author_name.strip()
         
         # 商品形式
         product_format = product_info.get('product_format', '')
-        if product_format and product_format.strip():
+        if self._is_valid_data(product_format):
             taxonomies['product_format'] = product_format.strip()
         
         # ページ数
         page_count = product_info.get('page_count', '')
-        if page_count and str(page_count).strip():
+        if page_count and str(page_count).strip() and str(page_count).strip() != '0':
             taxonomies['page_count'] = str(page_count).strip()
         
         return taxonomies 
@@ -321,12 +325,12 @@ class WordPressArticleGenerator:
         
         # 原作名（複数ソース対応）
         original_work = grok_result.get('original_work', '') or product_info.get('original_work', '')
-        if original_work and original_work.strip():
+        if self._is_valid_data(original_work):
             meta_input['original_work'] = original_work.strip()
         
         # キャラクター名（複数ソース対応）
         character_name = grok_result.get('character_name', '') or product_info.get('character_name', '')
-        if character_name and character_name.strip():
+        if self._is_valid_data(character_name):
             meta_input['character_name'] = character_name.strip()
         
         # サークル名
@@ -336,7 +340,7 @@ class WordPressArticleGenerator:
                 circle_name = product_info['maker'][0]
             elif isinstance(product_info['maker'], str):
                 circle_name = product_info['maker']
-        if circle_name and circle_name.strip():
+        if self._is_valid_data(circle_name):
             meta_input['circle_name'] = circle_name.strip()
         
         # 作者名
@@ -344,17 +348,17 @@ class WordPressArticleGenerator:
         if author_name:
             if isinstance(author_name, list) and author_name:
                 author_name = author_name[0]
-            if isinstance(author_name, str) and author_name.strip():
+            if isinstance(author_name, str) and self._is_valid_data(author_name):
                 meta_input['author_name'] = author_name.strip()
         
         # 商品形式
         product_format = product_info.get('product_format', '')
-        if product_format and product_format.strip():
+        if self._is_valid_data(product_format):
             meta_input['product_format'] = product_format.strip()
         
         # ページ数
         page_count = product_info.get('page_count', '')
-        if page_count and str(page_count).strip():
+        if page_count and str(page_count).strip() and str(page_count).strip() != '0':
             meta_input['page_count'] = str(page_count).strip()
         
         # FANZA商品ID
@@ -366,17 +370,84 @@ class WordPressArticleGenerator:
             match = re.search(r'/([a-zA-Z0-9_]+)/?(?:\?|$)', url)
             if match:
                 product_id = match.group(1)
-        if product_id and product_id.strip():
+        if self._is_valid_data(product_id):
             meta_input['fanza_product_id'] = product_id.strip()
         
         # AI分析信頼度
         ai_confidence = product_info.get('ai_confidence', 0)
-        if ai_confidence:
+        if ai_confidence and ai_confidence > 0:
             meta_input['ai_confidence'] = str(ai_confidence)
         
         # 分析ソース
         analysis_source = product_info.get('analysis_source', '')
-        if analysis_source and analysis_source.strip():
+        if self._is_valid_data(analysis_source):
             meta_input['analysis_source'] = analysis_source.strip()
         
         return meta_input
+    
+    def _generate_slug(self, product_info: Dict[str, Any]) -> str:
+        """スラッグ（商品ID）を生成"""
+        # 1. 既存のproduct_idを使用
+        product_id = product_info.get('product_id', '')
+        if product_id and product_id.strip():
+            return self._clean_slug(product_id.strip())
+        
+        # 2. URLから商品IDを抽出
+        url = product_info.get('url', '')
+        if url:
+            import re
+            match = re.search(r'/([a-zA-Z0-9_]+)/?(?:\?|$)', url)
+            if match:
+                extracted_id = match.group(1)
+                return self._clean_slug(extracted_id)
+        
+        # 3. フォールバック：タイトルベース
+        title = product_info.get('title', 'product')
+        import re
+        # 日本語文字、英数字、ハイフンのみ残す
+        clean_title = re.sub(r'[^\w\-]', '-', title)
+        clean_title = re.sub(r'-+', '-', clean_title)  # 連続ハイフンを1つに
+        clean_title = clean_title.strip('-')[:50]  # 最大50文字
+        
+        return clean_title or 'product'
+    
+    def _clean_slug(self, slug: str) -> str:
+        """スラッグをクリーン化"""
+        import re
+        # 英数字、ハイフン、アンダースコアのみ許可
+        cleaned = re.sub(r'[^a-zA-Z0-9\-_]', '', slug)
+        # 先頭末尾のハイフン・アンダースコア除去
+        cleaned = cleaned.strip('-_')
+        return cleaned or 'product'
+    
+    def _is_valid_data(self, data: str) -> bool:
+        """データが有効かどうかをチェック（「不明」関連を除外）"""
+        if not data or not isinstance(data, str):
+            return False
+        
+        data_lower = data.strip().lower()
+        
+        # 除外する値のリスト
+        invalid_values = {
+            '', '不明', 'unknown', 'なし', 'none', 'null', '未設定', '未定', 
+            '情報なし', 'no data', 'n/a', 'na', '---', '--', '-',
+            'tbd', 'to be determined', '後日発表', '詳細不明', '調査中',
+            'raw', '不明 raw', 'unknown raw'
+        }
+        
+        return data_lower not in invalid_values
+    
+    def _clean_data_list(self, data_list: list) -> list:
+        """データリストから無効な値を除去し、重複を排除"""
+        if not data_list:
+            return []
+        
+        # 有効なデータのみフィルタリング
+        valid_data = []
+        for item in data_list:
+            if isinstance(item, str) and self._is_valid_data(item):
+                cleaned_item = item.strip()
+                if cleaned_item and cleaned_item not in valid_data:
+                    valid_data.append(cleaned_item)
+        
+        return valid_data
