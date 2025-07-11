@@ -428,6 +428,12 @@ class SpreadsheetManager:
                 
         return results
 
+    def clear_product_cache(self):
+        """商品コードキャッシュをクリア"""
+        self._product_codes_cache = None
+        self._cache_timestamp = None
+        print("Debug: 商品コードキャッシュをクリアしました")
+
     def add_product(self, product_data: Dict[str, Any]) -> bool:
         """商品情報を追加（商品管理シート9カラム対応）"""
         try:
@@ -542,6 +548,9 @@ class SpreadsheetManager:
                         'values': [row_data]
                     }
                 ).execute()
+                
+                # 商品追加後にキャッシュをクリア
+                self.clear_product_cache()
                 return True
             except Exception as e:
                 self.monitor.log_error(f"商品の追加に失敗: {str(e)}")

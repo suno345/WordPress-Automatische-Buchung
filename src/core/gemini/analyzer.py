@@ -190,7 +190,15 @@ class Gemini_Analyzer:
                             if 'content' in candidate and 'parts' in candidate['content']:
                                 text_part = candidate['content']['parts'][0]
                                 if 'text' in text_part:
-                                    return text_part['text']
+                                    text_content = text_part['text'].strip()
+                                    if text_content:  # 空文字列でないことを確認
+                                        return text_content
+                                    else:
+                                        self.logger.warning("Gemini APIから空のレスポンス")
+                                        return None
+                        
+                        self.logger.warning(f"Gemini APIレスポンスの構造が不正: {response_data}")
+                        return None
                     
                     else:
                         error_text = await response.text()

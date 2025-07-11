@@ -149,6 +149,7 @@ class VPS_Simple_Orchestrator:
             success_count = 0
             keyword_index = 0
             max_keywords = len(keywords_list)
+            processed_products = set()  # 処理済み商品のトラッキング
             
             # 48件予約投稿するまでキーワードを順次処理
             while success_count < 48 and keyword_index < max_keywords * 2:  # 最大2周まで
@@ -172,16 +173,29 @@ class VPS_Simple_Orchestrator:
                         await asyncio.sleep(10)
                         continue
                     
-                    # このキーワードから有効な商品を全て取得
+                    # このキーワードから有効な商品を全て取得（既に処理済みの商品は除外）
                     valid_products = []
                     for product in products:
                         product_url = product.get('URL', '')
+                        product_id = product.get('product_id', '')
+                        
+                        # 商品IDまたはURLで重複チェック
+                        identifier = product_id or product_url
+                        if not identifier:
+                            continue
+                            
+                        # 既に処理済みの商品はスキップ
+                        if identifier in processed_products:
+                            continue
+                            
+                        # スプレッドシートでの重複チェック
                         if product_url and not self.spreadsheet_manager.check_product_exists(product_url):
                             # キーワード情報を商品に付加
                             product['sheet_original_work'] = original_work
                             product['sheet_character_name'] = character_name
                             product['source_keyword'] = keyword
                             valid_products.append(product)
+                            processed_products.add(identifier)  # 処理済みとしてマーク
                     
                     self.logger.info(f"キーワード '{keyword}' から {len(valid_products)} 件の新規商品を発見")
                     
@@ -222,7 +236,7 @@ class VPS_Simple_Orchestrator:
                     # キーワードの最終処理日時を更新
                     self.spreadsheet_manager.update_keyword_last_processed(keyword, character_name)
                     
-                    # 次のキーワードへ
+                    # 次のキーワードへ（必ず進む）
                     keyword_index += 1
                     
                     # キーワード間の休憩
@@ -635,18 +649,24 @@ class VPS_Simple_Orchestrator:
                 'original_work': original_work
             }
             
-            try:
-                # AIによる追加分析も実行
-                ai_result = await self.grok_analyzer.analyze_product(product_info)
-                
-                # スプレッドシート情報が空の場合のみAI結果を使用
-                if not character_name and ai_result.get('character_name'):
-                    grok_result['character_name'] = ai_result.get('character_name')
-                if not original_work and ai_result.get('original_work'):
-                    grok_result['original_work'] = ai_result.get('original_work')
+            # スプレッドシート情報が不足している場合のみAI分析実行
+            if not character_name or not original_work:
+                try:
+                    self.logger.info(f"スプレッドシート情報不足のため AI分析実行: キャラ名={character_name}, 原作名={original_work}")
+                    ai_result = await self.grok_analyzer.analyze_product(product_info)
                     
-            except Exception as e:
-                self.monitor.log_warning(f"Grok分析失敗（スプレッドシート情報を使用）: {str(e)}")
+                    # 不足している情報をAI結果で補完
+                    if not character_name and ai_result.get('character_name'):
+                        grok_result['character_name'] = ai_result.get('character_name')
+                        self.logger.info(f"AI分析でキャラ名を補完: {ai_result.get('character_name')}")
+                    if not original_work and ai_result.get('original_work'):
+                        grok_result['original_work'] = ai_result.get('original_work')
+                        self.logger.info(f"AI分析で原作名を補完: {ai_result.get('original_work')}")
+                        
+                except Exception as e:
+                    self.logger.warning(f"AI分析失敗（スプレッドシート情報を使用）: {str(e)}")
+            else:
+                self.logger.info(f"スプレッドシート情報使用: キャラ名={character_name}, 原作名={original_work}")
             
             # キャラ名・原作名確認チェック
             if not self._validate_character_and_work(grok_result, product_info.get('title', 'Unknown')):
