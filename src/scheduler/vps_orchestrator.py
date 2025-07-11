@@ -101,7 +101,7 @@ class VPS_Simple_Orchestrator:
             raise
     
     async def run_daily_schedule_48posts(self, target_date: datetime = None) -> int:
-        """1日48件予約投稿システム（30分間隔）"""
+        """1日48件予約投稿システム（30分間隔、キーワード順次検索）"""
         try:
             if target_date is None:
                 # 翌日の日付を設定
@@ -112,9 +112,17 @@ class VPS_Simple_Orchestrator:
             # 開始時刻を翌日0:30に設定
             start_time = target_date.replace(hour=0, minute=30, second=0, microsecond=0)
             
+            # キーワード順次検索用の準備
+            keywords_list = self.spreadsheet_manager.get_sequential_keywords_for_48posts(48)
+            if not keywords_list:
+                self.logger.warning("アクティブなキーワードが見つかりません - 通常検索にフォールバック")
+                return await self._run_48posts_fallback_mode(target_date, start_time)
+            
+            self.logger.info(f"キーワード順次検索モード - {len(keywords_list)} 件のキーワードで実行")
+            
             success_count = 0
             attempt_count = 0
-            max_attempts = 100  # 最大試行回数
+            max_attempts = 150  # キーワード検索では試行回数を増加
             
             # 48件予約投稿するまでループ
             while success_count < 48 and attempt_count < max_attempts:
@@ -122,13 +130,19 @@ class VPS_Simple_Orchestrator:
                     # 予約投稿時刻を計算（30分間隔）
                     scheduled_time = start_time + timedelta(minutes=30 * success_count)
                     
-                    self.logger.info(f"予約投稿処理 {success_count + 1}/48 - 予定時刻: {scheduled_time.strftime('%m/%d %H:%M')}")
+                    # 現在の処理インデックスに対応するキーワードを取得
+                    keyword_info = keywords_list[success_count % len(keywords_list)]
+                    keyword = keyword_info.get('keyword', '')
+                    character_name = keyword_info.get('character_name', '')
+                    original_work = keyword_info.get('original_work', '')
                     
-                    # 最新商品を取得（重複除外）
-                    products = await self.fanza_retriever.get_latest_products(hits=10)
+                    self.logger.info(f"予約投稿処理 {success_count + 1}/48 - キーワード: '{keyword}' (キャラ: {character_name}) - 予定時刻: {scheduled_time.strftime('%m/%d %H:%M')}")
+                    
+                    # キーワードで商品検索
+                    products = await self.fanza_retriever.hybrid_search_products(keyword, limit=20)
                     
                     if not products:
-                        self.logger.warning("商品情報が取得できませんでした - 30秒後にリトライ")
+                        self.logger.warning(f"キーワード '{keyword}' で商品が見つかりません - 30秒後にリトライ")
                         await asyncio.sleep(30)
                         attempt_count += 1
                         continue
@@ -138,26 +152,36 @@ class VPS_Simple_Orchestrator:
                     for product in products:
                         product_url = product.get('URL', '')
                         if product_url and not self.spreadsheet_manager.check_product_exists(product_url):
+                            # キーワード情報を商品に付加
+                            product['sheet_original_work'] = original_work
+                            product['sheet_character_name'] = character_name
+                            product['source_keyword'] = keyword
                             valid_product = product
                             break
                     
                     if not valid_product:
-                        self.logger.warning("新規商品が見つかりません - 60秒後にリトライ")
-                        await asyncio.sleep(60)
+                        self.logger.warning(f"キーワード '{keyword}' で新規商品が見つかりません - 次のキーワードに移行")
+                        # キーワードの最終処理日時を更新（検索実行したため）
+                        self.spreadsheet_manager.update_keyword_last_processed(keyword, character_name)
                         attempt_count += 1
                         continue
                     
-                    # 予約投稿処理
-                    result = await self._process_single_product_scheduled(valid_product, scheduled_time)
+                    # 予約投稿処理（キーワード情報付き）
+                    result = await self._process_single_product_scheduled_with_keywords(valid_product, scheduled_time)
                     
                     if result:
                         success_count += 1
-                        self.logger.info(f"予約投稿成功 {success_count}/48: {valid_product.get('title', 'Unknown')} at {scheduled_time.strftime('%m/%d %H:%M')}")
+                        self.logger.info(f"予約投稿成功 {success_count}/48: {valid_product.get('title', 'Unknown')} (キーワード: {keyword}) at {scheduled_time.strftime('%m/%d %H:%M')}")
+                        
+                        # キーワードの最終処理日時を更新
+                        self.spreadsheet_manager.update_keyword_last_processed(keyword, character_name)
                         
                         # 成功時は短い間隔で次の処理
                         await asyncio.sleep(5)
                     else:
-                        self.logger.warning(f"予約投稿失敗: {valid_product.get('title', 'Unknown')}")
+                        self.logger.warning(f"予約投稿失敗: {valid_product.get('title', 'Unknown')} (キーワード: {keyword})")
+                        # 失敗時も最終処理日時は更新（検索は実行したため）
+                        self.spreadsheet_manager.update_keyword_last_processed(keyword, character_name)
                         # 失敗時は少し長めに待機
                         await asyncio.sleep(15)
                     
@@ -184,6 +208,75 @@ class VPS_Simple_Orchestrator:
         except Exception as e:
             self.error_logger.log_error("VPS_SCHEDULE_ERROR", f"48件予約投稿エラー: {str(e)}")
             raise
+
+    async def _run_48posts_fallback_mode(self, target_date: datetime, start_time: datetime) -> int:
+        """48件予約投稿のフォールバックモード（通常の最新商品検索）"""
+        try:
+            self.logger.info("フォールバックモード: 最新商品検索で48件予約投稿を実行")
+            
+            success_count = 0
+            attempt_count = 0
+            max_attempts = 100
+            
+            while success_count < 48 and attempt_count < max_attempts:
+                try:
+                    # 予約投稿時刻を計算（30分間隔）
+                    scheduled_time = start_time + timedelta(minutes=30 * success_count)
+                    
+                    self.logger.info(f"フォールバック予約投稿処理 {success_count + 1}/48 - 予定時刻: {scheduled_time.strftime('%m/%d %H:%M')}")
+                    
+                    # 最新商品を取得（重複除外）
+                    products = await self.fanza_retriever.get_latest_products(hits=15)
+                    
+                    if not products:
+                        self.logger.warning("商品情報が取得できませんでした - 30秒後にリトライ")
+                        await asyncio.sleep(30)
+                        attempt_count += 1
+                        continue
+                    
+                    # 重複除外処理
+                    valid_product = None
+                    for product in products:
+                        product_url = product.get('URL', '')
+                        if product_url and not self.spreadsheet_manager.check_product_exists(product_url):
+                            valid_product = product
+                            break
+                    
+                    if not valid_product:
+                        self.logger.warning("新規商品が見つかりません - 60秒後にリトライ")
+                        await asyncio.sleep(60)
+                        attempt_count += 1
+                        continue
+                    
+                    # 予約投稿処理
+                    result = await self._process_single_product_scheduled(valid_product, scheduled_time)
+                    
+                    if result:
+                        success_count += 1
+                        self.logger.info(f"フォールバック予約投稿成功 {success_count}/48: {valid_product.get('title', 'Unknown')} at {scheduled_time.strftime('%m/%d %H:%M')}")
+                        await asyncio.sleep(5)
+                    else:
+                        self.logger.warning(f"フォールバック予約投稿失敗: {valid_product.get('title', 'Unknown')}")
+                        await asyncio.sleep(15)
+                    
+                    attempt_count += 1
+                    
+                    # 10件ごとに長めの休憩
+                    if success_count > 0 and success_count % 10 == 0:
+                        self.logger.info(f"フォールバック中間休憩 - 現在 {success_count}/48 件完了")
+                        await asyncio.sleep(30)
+                
+                except Exception as e:
+                    self.logger.error(f"フォールバック予約投稿処理エラー: {str(e)}")
+                    await asyncio.sleep(30)
+                    attempt_count += 1
+                    continue
+            
+            return success_count
+            
+        except Exception as e:
+            self.error_logger.log_error("VPS_FALLBACK_ERROR", f"フォールバック48件予約投稿エラー: {str(e)}")
+            return 0
     
     async def run_scheduled_posting(self, posts_per_batch: int = 1):
         """24時間予約投稿システム（30分間隔、スプレッドシートキーワード使用）"""

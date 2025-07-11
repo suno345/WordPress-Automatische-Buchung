@@ -218,6 +218,114 @@ class SpreadsheetManager:
             self.monitor.log_error(f"キーワードの状態更新に失敗: {str(e)}")
             return False
 
+    def get_next_keyword_to_process(self) -> Optional[Dict]:
+        """次に処理すべきキーワードを取得（最終処理日時の古い順）"""
+        try:
+            # A列がTRUEのキーワードを取得
+            active_keywords = self.get_active_keywords()
+            if not active_keywords:
+                print("Debug: アクティブなキーワードが見つかりません")
+                return None
+            
+            # 最終処理日時でソート（未処理または古い順）
+            def parse_datetime(date_str):
+                if not date_str or date_str.strip() == '':
+                    return datetime.min  # 未処理の場合は最も古い日時として扱う
+                try:
+                    # ISO形式で解析を試行
+                    return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                except ValueError:
+                    try:
+                        # 一般的な日時形式で解析を試行
+                        return datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S')
+                    except ValueError:
+                        return datetime.min  # パースできない場合は最も古い日時として扱う
+            
+            # 最終処理日時でソート
+            sorted_keywords = sorted(active_keywords, key=lambda x: parse_datetime(x.get('last_processed', '')))
+            
+            # 最も古い（または未処理の）キーワードを返す
+            next_keyword = sorted_keywords[0]
+            print(f"Debug: 次の処理対象キーワード: {next_keyword['keyword']} (最終処理: {next_keyword.get('last_processed', '未処理')})")
+            
+            return next_keyword
+            
+        except Exception as e:
+            self.monitor.log_error(f"次のキーワード取得に失敗: {str(e)}")
+            return None
+
+    def update_keyword_last_processed(self, keyword: str, character_name: str = None) -> bool:
+        """キーワードの最終処理日時を更新"""
+        try:
+            # 現在のデータを取得
+            values = self._get_sheet_values(self.keyword_sheet, 'A:G')
+            if not values:
+                return False
+
+            # キーワードまたはキャラクター名に一致する行を探す
+            for i, row in enumerate(values[1:], start=2):  # ヘッダーをスキップ
+                row_keyword = row[3] if len(row) > 3 else ''
+                row_character = row[2] if len(row) > 2 else ''
+                
+                # キーワードまたはキャラクター名で一致判定
+                if (keyword and row_keyword == keyword) or (character_name and row_character == character_name):
+                    # E列（最終処理日時）を更新
+                    update_range = f'E{i}'
+                    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    update_values = [[current_time]]
+                    
+                    print(f"Debug: キーワード '{keyword}' (キャラ: {character_name}) の最終処理日時を更新: {current_time}")
+                    
+                    # スプレッドシートを更新
+                    return self._update_sheet_values(self.keyword_sheet, update_range, update_values)
+            
+            print(f"Warning: キーワード '{keyword}' (キャラ: {character_name}) が見つかりませんでした")
+            return False
+
+        except Exception as e:
+            self.monitor.log_error(f"最終処理日時の更新に失敗: {str(e)}")
+            return False
+
+    def get_sequential_keywords_for_48posts(self, start_count: int = 48) -> List[Dict]:
+        """48件投稿用の順次キーワード取得"""
+        try:
+            # A列がTRUEのキーワードを取得
+            active_keywords = self.get_active_keywords()
+            if not active_keywords:
+                return []
+            
+            # 最終処理日時でソート（古い順）
+            def parse_datetime(date_str):
+                if not date_str or date_str.strip() == '':
+                    return datetime.min
+                try:
+                    return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                except ValueError:
+                    try:
+                        return datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S')
+                    except ValueError:
+                        return datetime.min
+            
+            sorted_keywords = sorted(active_keywords, key=lambda x: parse_datetime(x.get('last_processed', '')))
+            
+            # 必要な件数分のキーワードを循環して取得
+            result_keywords = []
+            keyword_count = len(sorted_keywords)
+            
+            if keyword_count == 0:
+                return []
+            
+            for i in range(start_count):
+                keyword_index = i % keyword_count  # 循環させる
+                result_keywords.append(sorted_keywords[keyword_index])
+            
+            print(f"Debug: 48件投稿用に {len(result_keywords)} 件のキーワードを準備しました")
+            return result_keywords
+            
+        except Exception as e:
+            self.monitor.log_error(f"順次キーワード取得に失敗: {str(e)}")
+            return []
+
     def _convert_product_id_to_url(self, product_id: str) -> str:
         """
         商品IDをFANZAの商品詳細URL形式に変換する。
