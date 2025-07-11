@@ -60,7 +60,7 @@ env/
 temp/
 
 # ドキュメント（docsディレクトリに移動済み）
-/README.md
+# /README.md ← VPSデプロイ用に必要なので除外
 /FOLDER_STRUCTURE.md
 /GEMINI_MIGRATION.md
 /VPS_SETUP.md
