@@ -119,7 +119,14 @@ class WordPressArticleGenerator:
     
     def _generate_image_gallery(self, product_info: Dict[str, Any]) -> str:
         """画像ギャラリーを生成"""
-        if 'sampleImageURL' not in product_info:
+        # 新しいsample_imagesフィールドに対応
+        sample_images = product_info.get('sample_images', [])
+        
+        # 従来のsampleImageURLとの互換性維持
+        if not sample_images and 'sampleImageURL' in product_info:
+            sample_images = list(product_info['sampleImageURL'].values())
+        
+        if not sample_images:
             return ""
             
         gallery = [
@@ -127,8 +134,9 @@ class WordPressArticleGenerator:
             "<figure class='wp-block-gallery'>"
         ]
         
-        for image_url in product_info['sampleImageURL'].values():
-            gallery.append(f"<figure class='wp-block-image'><img src='{image_url}' alt='サンプル画像'/></figure>")
+        for image_url in sample_images:
+            if image_url:  # 空文字列チェック
+                gallery.append(f"<figure class='wp-block-image'><img src='{image_url}' alt='サンプル画像'/></figure>")
         
         gallery.extend([
             "</figure>",
@@ -139,19 +147,61 @@ class WordPressArticleGenerator:
     
     def _generate_story(self, product_info: Dict[str, Any]) -> str:
         """ストーリーを生成"""
-        if 'description' not in product_info:
-            return ""
-            
-        return f"<!-- wp:paragraph -->\n<p>{product_info['description']}</p>\n<!-- /wp:paragraph -->"
+        # 複数のソースから説明文を取得
+        story_content = ""
+        
+        # 1. FANZA の説明文
+        if 'description' in product_info and product_info['description']:
+            story_content = product_info['description']
+        
+        # 2. Grok/AI生成の説明文（より詳細な場合は置き換え）
+        if 'generated_description' in product_info and product_info['generated_description']:
+            ai_desc = product_info['generated_description']
+            if len(ai_desc) > len(story_content):  # より詳細な場合
+                story_content = ai_desc
+        
+        # 3. フォールバック説明文
+        if not story_content:
+            title = product_info.get('title', '作品')
+            circle_name = product_info.get('circle_name', '作者')
+            story_content = f"{title}は{circle_name}によって制作された同人作品です。詳細な内容については、FANZAの商品ページをご確認ください。"
+        
+        return f"<!-- wp:paragraph -->\n<p>{story_content}</p>\n<!-- /wp:paragraph -->"
     
     def _generate_affiliate_link(self, product_info: Dict[str, Any]) -> str:
         """アフィリエイトリンクを生成"""
-        if 'affiliateURL' not in product_info:
+        # 既存のaffiliateURLがある場合はそれを使用
+        if 'affiliateURL' in product_info and product_info['affiliateURL']:
+            affiliate_url = product_info['affiliateURL']
+        else:
+            # FANZAアフィリエイトIDから動的生成
+            affiliate_id = os.getenv('FANZA_AFFILIATE_ID', '')
+            product_url = product_info.get('url', '')
+            
+            if not affiliate_id or not product_url:
+                return ""
+            
+            # FANZAアフィリエイトリンクの生成
+            if 'dmm.co.jp' in product_url:
+                # 商品IDを抽出
+                import re
+                product_id_match = re.search(r'/([a-zA-Z0-9_]+)/?(?:\?|$)', product_url)
+                if product_id_match:
+                    product_id = product_id_match.group(1)
+                    affiliate_url = f"https://al.dmm.co.jp/?lurl=https%3A%2F%2Fwww.dmm.co.jp%2Fdc%2Fdoujin%2F-%2Fdetail%2F%3D%2Fcid%3D{product_id}%2F&af_id={affiliate_id}&ch=toolbar&ch_id=link"
+                else:
+                    # フォールバック：元のURLをアフィリエイト化
+                    affiliate_url = f"https://al.dmm.co.jp/?lurl={product_url.replace('https://', 'https%3A%2F%2F').replace('/', '%2F')}&af_id={affiliate_id}&ch=toolbar&ch_id=link"
+            else:
+                # FANZA以外の場合は元のURLを使用
+                affiliate_url = product_url
+        
+        if not affiliate_url:
             return ""
             
         return (
             "<!-- wp:button -->\n"
-            f"<div class='wp-block-button'><a class='wp-block-button__link' href='{product_info['affiliateURL']}'>"
+            f"<div class='wp-block-button'><a class='wp-block-button__link' href='{affiliate_url}' target='_blank' rel='noopener'>"
             "FANZAでこの作品をチェックする</a></div>\n"
             "<!-- /wp:button -->"
         )
