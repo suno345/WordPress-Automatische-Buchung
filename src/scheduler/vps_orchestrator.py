@@ -57,6 +57,32 @@ class VPS_Simple_Orchestrator:
         # ロガーの設定
         self.article_generator.logger = self.error_logger
     
+    def _validate_character_and_work(self, grok_result: Dict[str, Any], product_title: str) -> bool:
+        """キャラ名・原作名の確認
+        
+        Args:
+            grok_result: ハイブリッド分析結果
+            product_title: 商品タイトル（ログ用）
+            
+        Returns:
+            bool: 両方確認できた場合True、いずれか未確認の場合False
+        """
+        character_name = grok_result.get('character_name', '').strip()
+        original_work = grok_result.get('original_work', '').strip()
+        
+        if not character_name or not original_work:
+            missing = []
+            if not character_name:
+                missing.append("キャラ名")
+            if not original_work:
+                missing.append("原作名")
+            
+            self.logger.info(f"投稿スキップ: {', '.join(missing)}未確認 - {product_title[:30]}")
+            return False
+        
+        self.logger.info(f"キャラ・原作確認OK: {character_name} ({original_work}) - {product_title[:30]}")
+        return True
+    
     async def run_simple_posting(self, max_posts: int = None):
         """シンプル投稿実行（VPS向け）"""
         try:
@@ -121,34 +147,33 @@ class VPS_Simple_Orchestrator:
             self.logger.info(f"キーワード順次検索モード - {len(keywords_list)} 件のキーワードで実行")
             
             success_count = 0
-            attempt_count = 0
-            max_attempts = 150  # キーワード検索では試行回数を増加
+            keyword_index = 0
+            max_keywords = len(keywords_list)
             
-            # 48件予約投稿するまでループ
-            while success_count < 48 and attempt_count < max_attempts:
+            # 48件予約投稿するまでキーワードを順次処理
+            while success_count < 48 and keyword_index < max_keywords * 2:  # 最大2周まで
                 try:
-                    # 予約投稿時刻を計算（30分間隔）
-                    scheduled_time = start_time + timedelta(minutes=30 * success_count)
-                    
-                    # 現在の処理インデックスに対応するキーワードを取得
-                    keyword_info = keywords_list[success_count % len(keywords_list)]
+                    # 現在のキーワード情報を取得
+                    keyword_info = keywords_list[keyword_index % max_keywords]
                     keyword = keyword_info.get('keyword', '')
                     character_name = keyword_info.get('character_name', '')
                     original_work = keyword_info.get('original_work', '')
                     
-                    self.logger.info(f"予約投稿処理 {success_count + 1}/48 - キーワード: '{keyword}' (キャラ: {character_name}) - 予定時刻: {scheduled_time.strftime('%m/%d %H:%M')}")
+                    self.logger.info(f"キーワード処理開始: '{keyword}' (キャラ: {character_name}) - 現在{success_count}/48件完了")
                     
                     # キーワードで商品検索（人気順30件）
                     products = await self.fanza_retriever.hybrid_search_products(keyword, limit=30)
                     
                     if not products:
-                        self.logger.warning(f"キーワード '{keyword}' で商品が見つかりません - 30秒後にリトライ")
-                        await asyncio.sleep(30)
-                        attempt_count += 1
+                        self.logger.warning(f"キーワード '{keyword}' で商品が見つかりません - 次のキーワードへ")
+                        # キーワードの最終処理日時を更新
+                        self.spreadsheet_manager.update_keyword_last_processed(keyword, character_name)
+                        keyword_index += 1
+                        await asyncio.sleep(10)
                         continue
                     
-                    # 重複除外処理
-                    valid_product = None
+                    # このキーワードから有効な商品を全て取得
+                    valid_products = []
                     for product in products:
                         product_url = product.get('URL', '')
                         if product_url and not self.spreadsheet_manager.check_product_exists(product_url):
@@ -156,46 +181,60 @@ class VPS_Simple_Orchestrator:
                             product['sheet_original_work'] = original_work
                             product['sheet_character_name'] = character_name
                             product['source_keyword'] = keyword
-                            valid_product = product
-                            break
+                            valid_products.append(product)
                     
-                    if not valid_product:
-                        self.logger.warning(f"キーワード '{keyword}' で新規商品が見つかりません - 次のキーワードに移行")
-                        # キーワードの最終処理日時を更新（検索実行したため）
-                        self.spreadsheet_manager.update_keyword_last_processed(keyword, character_name)
-                        attempt_count += 1
-                        continue
+                    self.logger.info(f"キーワード '{keyword}' から {len(valid_products)} 件の新規商品を発見")
                     
-                    # 予約投稿処理（キーワード情報付き）
-                    result = await self._process_single_product_scheduled_with_keywords(valid_product, scheduled_time)
-                    
-                    if result:
-                        success_count += 1
-                        self.logger.info(f"予約投稿成功 {success_count}/48: {valid_product.get('title', 'Unknown')} (キーワード: {keyword}) at {scheduled_time.strftime('%m/%d %H:%M')}")
-                        
+                    if not valid_products:
+                        self.logger.warning(f"キーワード '{keyword}' で新規商品なし - 次のキーワードへ")
                         # キーワードの最終処理日時を更新
                         self.spreadsheet_manager.update_keyword_last_processed(keyword, character_name)
+                        keyword_index += 1
+                        await asyncio.sleep(10)
+                        continue
+                    
+                    # 有効な商品を順次予約投稿
+                    keyword_success_count = 0
+                    for product in valid_products:
+                        if success_count >= 48:
+                            break
                         
-                        # 成功時は短い間隔で次の処理
-                        await asyncio.sleep(5)
-                    else:
-                        self.logger.warning(f"予約投稿失敗: {valid_product.get('title', 'Unknown')} (キーワード: {keyword})")
-                        # 失敗時も最終処理日時は更新（検索は実行したため）
-                        self.spreadsheet_manager.update_keyword_last_processed(keyword, character_name)
-                        # 失敗時は少し長めに待機
+                        # 予約投稿時刻を計算（30分間隔）
+                        scheduled_time = start_time + timedelta(minutes=30 * success_count)
+                        
+                        self.logger.info(f"予約投稿処理 {success_count + 1}/48 - キーワード: '{keyword}' - 商品: {product.get('title', 'Unknown')[:30]} - 予定時刻: {scheduled_time.strftime('%m/%d %H:%M')}")
+                        
+                        # 予約投稿処理（キーワード情報付き、キャラ名確認付き）
+                        result = await self._process_single_product_scheduled_with_keywords(product, scheduled_time)
+                        
+                        if result:
+                            success_count += 1
+                            keyword_success_count += 1
+                            self.logger.info(f"予約投稿成功 {success_count}/48: {product.get('title', 'Unknown')[:30]} (キーワード: {keyword})")
+                            await asyncio.sleep(3)  # 短い間隔
+                        else:
+                            self.logger.warning(f"予約投稿スキップ: {product.get('title', 'Unknown')[:30]} (キャラ名未確認)")
+                            await asyncio.sleep(1)  # より短い間隔
+                    
+                    # このキーワードの処理完了
+                    self.logger.info(f"キーワード '{keyword}' 処理完了: {keyword_success_count} 件予約投稿")
+                    
+                    # キーワードの最終処理日時を更新
+                    self.spreadsheet_manager.update_keyword_last_processed(keyword, character_name)
+                    
+                    # 次のキーワードへ
+                    keyword_index += 1
+                    
+                    # キーワード間の休憩
+                    if keyword_success_count > 0:
                         await asyncio.sleep(15)
-                    
-                    attempt_count += 1
-                    
-                    # 10件ごとに長めの休憩
-                    if success_count > 0 and success_count % 10 == 0:
-                        self.logger.info(f"中間休憩 - 現在 {success_count}/48 件完了")
-                        await asyncio.sleep(30)
+                    else:
+                        await asyncio.sleep(5)
                 
                 except Exception as e:
-                    self.logger.error(f"予約投稿処理エラー: {str(e)}")
+                    self.logger.error(f"キーワード処理エラー: {str(e)}")
+                    keyword_index += 1
                     await asyncio.sleep(30)
-                    attempt_count += 1
                     continue
             
             if success_count >= 48:
@@ -435,31 +474,20 @@ class VPS_Simple_Orchestrator:
             
             product_info['sample_images'] = valid_images
             
-            # Grok分析（エラー時はスキップ）
+            # ハイブリッド分析（エラー時はスキップ）
             grok_result = {}
             try:
                 self.logger.info(f"ハイブリッド分析を開始します: {product_info.get('title', 'unknown')}")
                 grok_result = await self.grok_analyzer.analyze_product(product_info)
                 self.logger.info(f"ハイブリッド分析完了 - キャラ名: {grok_result.get('character_name', '未取得')}")
                 
-                # キャラ名取得チェック
-                if not grok_result.get('character_name') or grok_result.get('character_name').strip() == '':
-                    self.monitor.log_warning(f"キャラ名未取得のため下書き保存: {product_id}")
-                    # 下書きとして保存
-                    article_data = self.article_generator.generate_article_content(
-                        product_info, {'character_name': '未取得', 'original_work': ''}
-                    )
-                    await self._save_as_draft(article_data, product_info, "キャラ名未取得")
-                    return False
+                # キャラ名・原作名確認チェック
+                if not self._validate_character_and_work(grok_result, product_info.get('title', 'Unknown')):
+                    return False  # 下書き保存せずスキップ
                     
             except Exception as e:
-                self.monitor.log_warning(f"Grok分析失敗（下書き保存）: {str(e)}")
-                # 下書きとして保存
-                article_data = self.article_generator.generate_article_content(
-                    product_info, {'character_name': '分析失敗', 'original_work': ''}
-                )
-                await self._save_as_draft(article_data, product_info, f"Grok分析失敗: {str(e)}")
-                return False
+                self.logger.warning(f"ハイブリッド分析失敗のためスキップ: {str(e)} - {product_info.get('title', 'Unknown')[:30]}")
+                return False  # 下書き保存せずスキップ
             
             # 記事生成
             article_data = self.article_generator.generate_article_content(
@@ -526,31 +554,20 @@ class VPS_Simple_Orchestrator:
             else:
                 product_info['sample_images'] = valid_images
             
-            # Grok分析（エラー時はスキップ）
+            # ハイブリッド分析（エラー時はスキップ）
             grok_result = {}
             try:
                 self.logger.info(f"ハイブリッド分析を開始します: {product_info.get('title', 'unknown')}")
                 grok_result = await self.grok_analyzer.analyze_product(product_info)
                 self.logger.info(f"ハイブリッド分析完了 - キャラ名: {grok_result.get('character_name', '未取得')}")
                 
-                # キャラ名取得チェック
-                if not grok_result.get('character_name') or grok_result.get('character_name').strip() == '':
-                    self.monitor.log_warning(f"キャラ名未取得のため下書き保存: {product_id}")
-                    # 下書きとして保存
-                    article_data = self.article_generator.generate_article_content(
-                        product_info, {'character_name': '未取得', 'original_work': ''}
-                    )
-                    await self._save_as_draft(article_data, product_info, "キャラ名未取得")
-                    return False
+                # キャラ名・原作名確認チェック
+                if not self._validate_character_and_work(grok_result, product_info.get('title', 'Unknown')):
+                    return False  # 下書き保存せずスキップ
                     
             except Exception as e:
-                self.monitor.log_warning(f"Grok分析失敗（下書き保存）: {str(e)}")
-                # 下書きとして保存
-                article_data = self.article_generator.generate_article_content(
-                    product_info, {'character_name': '分析失敗', 'original_work': ''}
-                )
-                await self._save_as_draft(article_data, product_info, f"Grok分析失敗: {str(e)}")
-                return False
+                self.logger.warning(f"ハイブリッド分析失敗のためスキップ: {str(e)} - {product_info.get('title', 'Unknown')[:30]}")
+                return False  # 下書き保存せずスキップ
             
             # 記事生成
             article_data = self.article_generator.generate_article_content(
@@ -631,14 +648,9 @@ class VPS_Simple_Orchestrator:
             except Exception as e:
                 self.monitor.log_warning(f"Grok分析失敗（スプレッドシート情報を使用）: {str(e)}")
             
-            # キャラ名チェック
-            if not grok_result.get('character_name') or grok_result.get('character_name').strip() == '':
-                self.monitor.log_warning(f"キャラ名未取得のため下書き保存: {product_id}")
-                article_data = self.article_generator.generate_article_content(
-                    product_info, {'character_name': '未取得', 'original_work': original_work}
-                )
-                await self._save_as_draft(article_data, product_info, f"キャラ名未取得 (キーワード: {source_keyword})")
-                return False
+            # キャラ名・原作名確認チェック
+            if not self._validate_character_and_work(grok_result, product_info.get('title', 'Unknown')):
+                return False  # 下書き保存せずスキップ
             
             # 記事生成
             article_data = self.article_generator.generate_article_content(
