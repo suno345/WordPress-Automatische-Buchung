@@ -519,7 +519,7 @@ class VPS_Simple_Orchestrator:
                     'character_name': grok_result.get('character_name', ''),
                     'original_work': grok_result.get('original_work', ''),
                     'status': '投稿完了',
-                    'post_url': str(post_result.get('post_id', '')),
+                    'post_url': post_result.get('url', ''),
                     'reserve_date': datetime.now().isoformat(),
                     'error_details': '',
                 })
@@ -600,7 +600,7 @@ class VPS_Simple_Orchestrator:
                     'character_name': grok_result.get('character_name', ''),
                     'original_work': grok_result.get('original_work', ''),
                     'status': '予約投稿',
-                    'post_url': str(post_result.get('post_id', '')),
+                    'post_url': post_result.get('url', ''),
                     'reserve_date': scheduled_time.strftime('%m/%d %H:%M'),
                     'error_details': '',
                 })
@@ -689,7 +689,7 @@ class VPS_Simple_Orchestrator:
                     'character_name': grok_result.get('character_name', ''),
                     'original_work': grok_result.get('original_work', ''),
                     'status': '予約投稿',
-                    'post_url': str(post_result.get('post_id', '')),
+                    'post_url': post_result.get('url', ''),
                     'reserve_date': scheduled_time.strftime('%m/%d %H:%M'),
                     'error_details': f'キーワード: {source_keyword}',
                 })
@@ -720,7 +720,7 @@ class VPS_Simple_Orchestrator:
                     'character_name': '下書き',
                     'original_work': '下書き',
                     'status': '下書き保存',
-                    'post_url': str(post_result.get('post_id', '')),
+                    'post_url': post_result.get('url', ''),
                     'reserve_date': datetime.now().isoformat(),
                     'error_details': reason,
                 })

@@ -25,6 +25,9 @@ class WordPressArticleGenerator:
             Dict[str, Any]: 生成された記事データ
         """
         try:
+            # カスタムフィールド（meta_input）を生成
+            meta_input = self._generate_meta_input(product_info, grok_result)
+            
             # 記事データの生成
             article_data = {
                 'title': self._generate_title(product_info, grok_result),
@@ -32,7 +35,8 @@ class WordPressArticleGenerator:
                 'status': 'draft',  # 下書きとして保存
                 'categories': self._get_categories(product_info),
                 'tags': self._get_tags(product_info, grok_result),
-                'custom_taxonomies': self._get_custom_taxonomies(product_info, grok_result)
+                'custom_taxonomies': self._get_custom_taxonomies(product_info, grok_result),
+                'meta_input': meta_input  # カスタムフィールド追加
             }
             
             return article_data
@@ -209,21 +213,60 @@ class WordPressArticleGenerator:
     def _get_categories(self, product_info: Dict[str, Any]) -> list:
         """カテゴリーを取得"""
         categories = []
-        if 'genre' in product_info:
-            categories.extend(product_info['genre'])
+        
+        # 新しいgenresフィールドに対応
+        if 'genres' in product_info and product_info['genres']:
+            # 有効なジャンルのみ追加
+            valid_genres = [g.strip() for g in product_info['genres'] if g and g.strip()]
+            categories.extend(valid_genres)
+        
+        # 従来のgenreフィールドとの互換性維持
+        elif 'genre' in product_info and product_info['genre']:
+            if isinstance(product_info['genre'], list):
+                categories.extend(product_info['genre'])
+            else:
+                categories.append(product_info['genre'])
+        
+        # フォールバック：基本カテゴリ
+        if not categories:
+            categories.append('同人作品')
+        
+        # 作品形式もカテゴリに追加
+        product_format = product_info.get('product_format', '')
+        if product_format and product_format not in categories:
+            categories.append(product_format)
+        
+        # 重複除去と空文字除去
+        categories = list(set([cat for cat in categories if cat and cat.strip()]))
+        
         return categories
     
     def _get_tags(self, product_info: Dict[str, Any], grok_result: Dict[str, Any]) -> list:
         """タグを取得"""
         tags = []
         
-        # 作者名をタグとして追加
-        if 'author' in product_info:
-            tags.extend(product_info['author'])
+        # サークル名をタグとして追加
+        circle_name = product_info.get('circle_name', '')
+        if circle_name and circle_name.strip():
+            tags.append(circle_name.strip())
         
-        # キャラクター名をタグとして追加
-        if 'character_name' in grok_result:
-            tags.append(grok_result['character_name'])
+        # 作者名をタグとして追加（サークル名と異なる場合のみ）
+        author_name = product_info.get('author_name', '') or product_info.get('author', '')
+        if author_name:
+            if isinstance(author_name, list) and author_name:
+                author_name = author_name[0]
+            
+            if isinstance(author_name, str) and author_name.strip():
+                author_name = author_name.strip()
+                # サークル名と異なる場合のみ追加
+                if author_name != circle_name:
+                    tags.append(author_name)
+        
+        # 重複除去と空文字除去
+        tags = list(set([tag for tag in tags if tag and tag.strip()]))
+        
+        # 商品形式・ページ数はカスタムフィールドで管理（タグには含めない）
+        # キャラクター名・原作名もカスタムフィールドで管理（タグには含めない）
         
         return tags
     
@@ -231,16 +274,109 @@ class WordPressArticleGenerator:
         """カスタムタクソノミーを取得"""
         taxonomies = {}
         
-        # 原作名
-        if 'original_work' in grok_result:
-            taxonomies['original_work'] = grok_result['original_work']
+        # 原作名（複数ソース対応）
+        original_work = grok_result.get('original_work', '') or product_info.get('original_work', '')
+        if original_work and original_work.strip():
+            taxonomies['original_work'] = original_work.strip()
         
-        # キャラクター名
-        if 'character_name' in grok_result:
-            taxonomies['character_name'] = grok_result['character_name']
+        # キャラクター名（複数ソース対応）
+        character_name = grok_result.get('character_name', '') or product_info.get('character_name', '')
+        if character_name and character_name.strip():
+            taxonomies['character_name'] = character_name.strip()
         
-        # サークル名
-        if 'maker' in product_info:
-            taxonomies['circle_name'] = product_info['maker'][0]
+        # サークル名（複数フィールド対応）
+        circle_name = product_info.get('circle_name', '')
+        if not circle_name and 'maker' in product_info:
+            if isinstance(product_info['maker'], list) and product_info['maker']:
+                circle_name = product_info['maker'][0]
+            elif isinstance(product_info['maker'], str):
+                circle_name = product_info['maker']
+        
+        if circle_name and circle_name.strip():
+            taxonomies['circle_name'] = circle_name.strip()
+        
+        # 作者名
+        author_name = product_info.get('author_name', '') or product_info.get('author', '')
+        if author_name:
+            if isinstance(author_name, list) and author_name:
+                author_name = author_name[0]
+            if isinstance(author_name, str) and author_name.strip():
+                taxonomies['author_name'] = author_name.strip()
+        
+        # 商品形式
+        product_format = product_info.get('product_format', '')
+        if product_format and product_format.strip():
+            taxonomies['product_format'] = product_format.strip()
+        
+        # ページ数
+        page_count = product_info.get('page_count', '')
+        if page_count and str(page_count).strip():
+            taxonomies['page_count'] = str(page_count).strip()
         
         return taxonomies 
+    
+    def _generate_meta_input(self, product_info: Dict[str, Any], grok_result: Dict[str, Any]) -> Dict[str, Any]:
+        """カスタムフィールド（meta_input）を生成"""
+        meta_input = {}
+        
+        # 原作名（複数ソース対応）
+        original_work = grok_result.get('original_work', '') or product_info.get('original_work', '')
+        if original_work and original_work.strip():
+            meta_input['original_work'] = original_work.strip()
+        
+        # キャラクター名（複数ソース対応）
+        character_name = grok_result.get('character_name', '') or product_info.get('character_name', '')
+        if character_name and character_name.strip():
+            meta_input['character_name'] = character_name.strip()
+        
+        # サークル名
+        circle_name = product_info.get('circle_name', '')
+        if not circle_name and 'maker' in product_info:
+            if isinstance(product_info['maker'], list) and product_info['maker']:
+                circle_name = product_info['maker'][0]
+            elif isinstance(product_info['maker'], str):
+                circle_name = product_info['maker']
+        if circle_name and circle_name.strip():
+            meta_input['circle_name'] = circle_name.strip()
+        
+        # 作者名
+        author_name = product_info.get('author_name', '') or product_info.get('author', '')
+        if author_name:
+            if isinstance(author_name, list) and author_name:
+                author_name = author_name[0]
+            if isinstance(author_name, str) and author_name.strip():
+                meta_input['author_name'] = author_name.strip()
+        
+        # 商品形式
+        product_format = product_info.get('product_format', '')
+        if product_format and product_format.strip():
+            meta_input['product_format'] = product_format.strip()
+        
+        # ページ数
+        page_count = product_info.get('page_count', '')
+        if page_count and str(page_count).strip():
+            meta_input['page_count'] = str(page_count).strip()
+        
+        # FANZA商品ID
+        product_id = product_info.get('product_id', '')
+        if not product_id and 'url' in product_info:
+            # URLから商品IDを抽出
+            import re
+            url = product_info['url']
+            match = re.search(r'/([a-zA-Z0-9_]+)/?(?:\?|$)', url)
+            if match:
+                product_id = match.group(1)
+        if product_id and product_id.strip():
+            meta_input['fanza_product_id'] = product_id.strip()
+        
+        # AI分析信頼度
+        ai_confidence = product_info.get('ai_confidence', 0)
+        if ai_confidence:
+            meta_input['ai_confidence'] = str(ai_confidence)
+        
+        # 分析ソース
+        analysis_source = product_info.get('analysis_source', '')
+        if analysis_source and analysis_source.strip():
+            meta_input['analysis_source'] = analysis_source.strip()
+        
+        return meta_input

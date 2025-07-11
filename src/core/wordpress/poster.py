@@ -21,7 +21,7 @@ class WordPressPoster:
         self.session = requests.Session()
         self.session.auth = (self.wp_username, self.wp_password)
 
-    def create_post(self, title: str, content: str, categories: List[int] = None, tags: List[int] = None, featured_media: int = None, status: str = 'publish', date: str = None) -> Dict[str, Any]:
+    def create_post(self, title: str, content: str, categories: List[int] = None, tags: List[int] = None, featured_media: int = None, status: str = 'publish', date: str = None, meta_input: Dict[str, Any] = None) -> Dict[str, Any]:
         """投稿の作成"""
         # カテゴリとタグが文字列のリストの場合、IDに変換
         if categories and isinstance(categories, list) and len(categories) > 0 and isinstance(categories[0], str):
@@ -44,6 +44,9 @@ class WordPressPoster:
             # 予約投稿の場合は日時を設定
             data['date'] = date
             data['date_gmt'] = date  # GMT時間も設定
+        if meta_input:
+            # カスタムフィールド（メタデータ）を設定
+            data['meta'] = meta_input
 
         response = self.session.post(f"{self.api_url}/posts", json=data)
         response.raise_for_status()
@@ -169,7 +172,7 @@ class WordPressPoster:
         """下書きの作成"""
         return self.create_post(title, content, categories, tags, featured_media, status='draft')
     
-    def create_scheduled_post(self, title: str, content: str, scheduled_date: str, categories: List[int] = None, tags: List[int] = None, featured_media: int = None) -> Dict[str, Any]:
+    def create_scheduled_post(self, title: str, content: str, scheduled_date: str, categories: List[int] = None, tags: List[int] = None, featured_media: int = None, meta_input: Dict[str, Any] = None) -> Dict[str, Any]:
         """予約投稿の作成"""
         data = {
             'title': title,
@@ -183,6 +186,8 @@ class WordPressPoster:
             data['tags'] = tags
         if featured_media:
             data['featured_media'] = featured_media
+        if meta_input:
+            data['meta'] = meta_input
 
         try:
             self.logger.debug(f"WordPress予約投稿リクエスト - URL: {self.api_url}/posts")
@@ -252,6 +257,7 @@ class WordPressPoster:
             categories = article_data.get('categories', [])
             tags = article_data.get('tags', [])
             featured_media = article_data.get('featured_media')
+            meta_input = article_data.get('meta_input', {})  # カスタムフィールド追加
             
             # タグ・カテゴリをIDに変換
             if categories and len(categories) > 0 and isinstance(categories[0], str):
@@ -259,7 +265,7 @@ class WordPressPoster:
             if tags and len(tags) > 0 and isinstance(tags[0], str):
                 tags = self.convert_tags_to_ids(tags)
             
-            result = self.create_scheduled_post(title, content, scheduled_date, categories, tags, featured_media)
+            result = self.create_scheduled_post(title, content, scheduled_date, categories, tags, featured_media, meta_input)
             return {'post_id': result.get('id'), 'url': result.get('link')}
         except Exception as e:
             self.logger.error(f"予約投稿エラー: {str(e)}")
