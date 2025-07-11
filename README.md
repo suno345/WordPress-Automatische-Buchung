@@ -5,10 +5,11 @@ VPS向けに最適化された同人作品のWordPress自動投稿システム�
 ## 機能
 
 - FANZAから商品情報を自動取得
-- AIによる記事自動生成
-- WordPress自動投稿
+- AIによる記事自動生成（Gemini + Grok）
+- WordPress自動投稿・予約投稿
 - Googleスプレッドシートとの連携
 - VPS環境での軽量実行
+- **48件予約投稿システム**（30分間隔で1日48件）
 
 ## セットアップ
 
@@ -83,9 +84,36 @@ python src/vps_main.py --mode daily --max-posts 3
 # キーワード投稿
 python src/vps_main.py --mode keyword --keyword "キーワード" --max-posts 2
 
+# 48件予約投稿（毎日0時実行用）
+python src/vps_main.py --mode schedule48
+
 # デバッグモード（詳細ログ表示）
 python src/vps_main.py --mode daily --max-posts 1 --debug
 ```
+
+## 🚀 48件予約投稿システム
+
+### 概要
+毎日0時に翌日分48件を30分間隔で予約投稿するシステムです。
+
+### セットアップ
+```bash
+# 自動セットアップ実行
+chmod +x scripts/setup_48posts_cron.sh
+./scripts/setup_48posts_cron.sh
+```
+
+### 監視・管理
+```bash
+# 監視ダッシュボード
+chmod +x scripts/monitor_48posts.sh
+./scripts/monitor_48posts.sh
+
+# ログ監視
+tail -f /var/log/wordpress-auto-post-48.log
+```
+
+詳細は[VPS_48POSTS_SETUP.md](docs/VPS_48POSTS_SETUP.md)を参照してください。
 
 ### トラブルシューティング
 

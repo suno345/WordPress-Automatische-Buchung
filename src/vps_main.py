@@ -62,11 +62,30 @@ async def run_scheduled_posts(posts_per_batch: int = 1):
         logger.error(f"VPS予約投稿エラー: {str(e)}")
         sys.exit(1)
 
+async def run_daily_schedule_48():
+    """1日48件予約投稿実行（毎日0時実行用）"""
+    logger = setup_logging()
+    orchestrator = VPS_Simple_Orchestrator()
+    
+    try:
+        logger.info("VPS 48件予約投稿開始")
+        success_count = await orchestrator.run_daily_schedule_48posts()
+        
+        if success_count >= 48:
+            logger.info(f"48件予約投稿完了! 成功: {success_count}件")
+        else:
+            logger.warning(f"48件予約投稿未完了: {success_count}件")
+            # 未完了でもエラー終了しない（次回に期待）
+        
+    except Exception as e:
+        logger.error(f"VPS 48件予約投稿エラー: {str(e)}")
+        sys.exit(1)
+
 def main():
     """メイン関数"""
     parser = argparse.ArgumentParser(description="VPS WordPress Auto Poster")
-    parser.add_argument('--mode', choices=['daily', 'keyword', 'scheduled'], required=True,
-                       help='実行モード: daily=日次投稿, keyword=キーワード投稿, scheduled=予約投稿')
+    parser.add_argument('--mode', choices=['daily', 'keyword', 'scheduled', 'schedule48'], required=True,
+                       help='実行モード: daily=日次投稿, keyword=キーワード投稿, scheduled=予約投稿, schedule48=48件予約投稿')
     parser.add_argument('--keyword', type=str,
                        help='キーワード投稿時のキーワード')
     parser.add_argument('--max-posts', type=int, default=5,
@@ -95,6 +114,8 @@ def main():
         asyncio.run(run_keyword_posts(args.keyword, args.max_posts))
     elif args.mode == 'scheduled':
         asyncio.run(run_scheduled_posts(args.batch_size))
+    elif args.mode == 'schedule48':
+        asyncio.run(run_daily_schedule_48())
     
     print(f"[{datetime.now()}] 処理完了")
 

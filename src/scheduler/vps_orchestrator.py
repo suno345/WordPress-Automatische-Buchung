@@ -100,6 +100,91 @@ class VPS_Simple_Orchestrator:
             self.error_logger.log_error("VPS_ERROR", f"VPS簡易投稿エラー: {str(e)}")
             raise
     
+    async def run_daily_schedule_48posts(self, target_date: datetime = None) -> int:
+        """1日48件予約投稿システム（30分間隔）"""
+        try:
+            if target_date is None:
+                # 翌日の日付を設定
+                target_date = datetime.now() + timedelta(days=1)
+            
+            self.logger.info(f"48件予約投稿開始 - 対象日: {target_date.strftime('%Y-%m-%d')}")
+            
+            # 開始時刻を翌日0:30に設定
+            start_time = target_date.replace(hour=0, minute=30, second=0, microsecond=0)
+            
+            success_count = 0
+            attempt_count = 0
+            max_attempts = 100  # 最大試行回数
+            
+            # 48件予約投稿するまでループ
+            while success_count < 48 and attempt_count < max_attempts:
+                try:
+                    # 予約投稿時刻を計算（30分間隔）
+                    scheduled_time = start_time + timedelta(minutes=30 * success_count)
+                    
+                    self.logger.info(f"予約投稿処理 {success_count + 1}/48 - 予定時刻: {scheduled_time.strftime('%m/%d %H:%M')}")
+                    
+                    # 最新商品を取得（重複除外）
+                    products = await self.fanza_retriever.get_latest_products(hits=10)
+                    
+                    if not products:
+                        self.logger.warning("商品情報が取得できませんでした - 30秒後にリトライ")
+                        await asyncio.sleep(30)
+                        attempt_count += 1
+                        continue
+                    
+                    # 重複除外処理
+                    valid_product = None
+                    for product in products:
+                        product_url = product.get('URL', '')
+                        if product_url and not self.spreadsheet_manager.check_product_exists(product_url):
+                            valid_product = product
+                            break
+                    
+                    if not valid_product:
+                        self.logger.warning("新規商品が見つかりません - 60秒後にリトライ")
+                        await asyncio.sleep(60)
+                        attempt_count += 1
+                        continue
+                    
+                    # 予約投稿処理
+                    result = await self._process_single_product_scheduled(valid_product, scheduled_time)
+                    
+                    if result:
+                        success_count += 1
+                        self.logger.info(f"予約投稿成功 {success_count}/48: {valid_product.get('title', 'Unknown')} at {scheduled_time.strftime('%m/%d %H:%M')}")
+                        
+                        # 成功時は短い間隔で次の処理
+                        await asyncio.sleep(5)
+                    else:
+                        self.logger.warning(f"予約投稿失敗: {valid_product.get('title', 'Unknown')}")
+                        # 失敗時は少し長めに待機
+                        await asyncio.sleep(15)
+                    
+                    attempt_count += 1
+                    
+                    # 10件ごとに長めの休憩
+                    if success_count > 0 and success_count % 10 == 0:
+                        self.logger.info(f"中間休憩 - 現在 {success_count}/48 件完了")
+                        await asyncio.sleep(30)
+                
+                except Exception as e:
+                    self.logger.error(f"予約投稿処理エラー: {str(e)}")
+                    await asyncio.sleep(30)
+                    attempt_count += 1
+                    continue
+            
+            if success_count >= 48:
+                self.logger.info(f"48件予約投稿完了! 対象日: {target_date.strftime('%Y-%m-%d')}")
+            else:
+                self.logger.warning(f"予約投稿未完了: {success_count}/48 件（試行回数上限到達）")
+            
+            return success_count
+            
+        except Exception as e:
+            self.error_logger.log_error("VPS_SCHEDULE_ERROR", f"48件予約投稿エラー: {str(e)}")
+            raise
+    
     async def run_scheduled_posting(self, posts_per_batch: int = 1):
         """24時間予約投稿システム（30分間隔、スプレッドシートキーワード使用）"""
         try:
