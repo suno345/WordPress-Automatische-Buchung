@@ -20,13 +20,24 @@ class Hybrid_Analyzer:
         """初期化"""
         load_dotenv()
         
-        # 各APIアナライザーを初期化
-        self.gemini_analyzer = Gemini_Analyzer()
-        self.grok_generator = Grok_Description_Generator()
-        
-        # ログ設定
+        # ログ設定（先に初期化）
         self.logger = get_logger(__name__)
         self.error_logger = Error_Logger()
+        
+        # 各APIアナライザーを初期化
+        try:
+            self.gemini_analyzer = Gemini_Analyzer()
+            self.logger.info("Gemini Analyzer 初期化成功")
+        except Exception as e:
+            self.logger.error(f"Gemini Analyzer 初期化失敗: {str(e)}")
+            self.gemini_analyzer = None
+            
+        try:
+            self.grok_generator = Grok_Description_Generator()
+            self.logger.info("Grok Generator 初期化成功")
+        except Exception as e:
+            self.logger.error(f"Grok Generator 初期化失敗: {str(e)}")
+            self.grok_generator = None
     
     async def analyze_product(self, product_info: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -37,9 +48,14 @@ class Hybrid_Analyzer:
         try:
             self.logger.info(f"ハイブリッド分析開始: {product_info.get('title', 'unknown')}")
             
-            # Step 1: Geminiでキャラクター分析
-            self.logger.info("Gemini キャラクター分析開始")
-            character_result = await self.gemini_analyzer.analyze_product(product_info)
+            # アナライザーの状態確認
+            if not self.gemini_analyzer:
+                self.logger.warning("Gemini Analyzer が初期化されていません")
+                character_result = self.get_empty_character_result()
+            else:
+                # Step 1: Geminiでキャラクター分析
+                self.logger.info("Gemini キャラクター分析開始")
+                character_result = await self.gemini_analyzer.analyze_product(product_info)
             
             # キャラクター分析結果をログ
             character_name = character_result.get('character_name', '')
@@ -47,9 +63,13 @@ class Hybrid_Analyzer:
             self.logger.info(f"Gemini 分析結果: {character_name} (信頼度: {confidence}%)")
             
             # Step 2: Grokで説明文生成
-            self.logger.info("Grok 説明文生成開始")
-            description = await self.grok_generator.generate_description(product_info, character_result)
-            self.logger.info(f"Grok 説明文生成完了: {len(description) if description else 0}文字")
+            if not self.grok_generator:
+                self.logger.warning("Grok Generator が初期化されていません")
+                description = self.get_default_description(product_info)
+            else:
+                self.logger.info("Grok 説明文生成開始")
+                description = await self.grok_generator.generate_description(product_info, character_result)
+                self.logger.info(f"Grok 説明文生成完了: {len(description) if description else 0}文字")
             
             # 結果統合
             final_result = {
@@ -136,6 +156,27 @@ class Hybrid_Analyzer:
             'quality_score': 20,  # 最低限のスコア
             'error_reason': error_reason
         }
+    
+    def get_empty_character_result(self) -> Dict[str, Any]:
+        """空のキャラクター分析結果を返す"""
+        return {
+            'character_name': '',
+            'original_work': '',
+            'confidence': 0,
+            'character_features': '',
+            'art_style': '',
+            'error_reason': 'Gemini Analyzer not initialized'
+        }
+    
+    def get_default_description(self, product_info: Dict[str, Any]) -> str:
+        """デフォルトの説明文を生成"""
+        title = product_info.get('title', '商品')
+        circle = product_info.get('circle_name', '')
+        
+        if circle:
+            return f"{circle}による{title}です。魅力的な内容の作品をお楽しみください。"
+        else:
+            return f"{title}。高品質な同人作品です。"
 
 # 旧Grok_Analyzerとの互換性のためのエイリアス
 # VPSオーケストレーターで使用される

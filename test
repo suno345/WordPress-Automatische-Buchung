@@ -1,0 +1,14 @@
+ # ハイブリッド分析のログを確認
+  LOG_LEVEL=DEBUG python src/vps_main.py --mode daily --max-posts 1 --debug2>&1 | grep -E
+  "ハイブリッド|Hybrid|Gemini|hybrid|gemini|分析開始|analyze_product"
+
+  # VPSオーケストレーターのimportを確認
+  grep -n "Hybrid_Analyzer\|Grok_Analyzer" src/scheduler/vps_orchestrator.py
+
+  # APIキーの存在確認
+  python -c "from dotenv import load_dotenv; import os; load_dotenv(); 
+  print('GEMINI_API_KEY exists:', bool(os.getenv('GEMINI_API_KEY'))); 
+  print('GROK_API_KEY exists:', bool(os.getenv('GROK_API_KEY')))"
+
+  # 全ログを確認（最初の100行）
+  LOG_LEVEL=DEBUG python src/vps_main.py --mode daily --max-posts 1 --debug2>&1 | head -100

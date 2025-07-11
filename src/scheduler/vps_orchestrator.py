@@ -37,7 +37,14 @@ class VPS_Simple_Orchestrator:
         
         # コンポーネントの初期化
         self.fanza_retriever = FANZA_Data_Retriever()
-        self.grok_analyzer = Grok_Analyzer()
+        
+        try:
+            self.grok_analyzer = Grok_Analyzer()
+            self.logger.info("Hybrid Analyzer (as Grok_Analyzer) 初期化成功")
+        except Exception as e:
+            self.logger.error(f"Hybrid Analyzer 初期化失敗: {str(e)}")
+            raise
+            
         self.article_generator = WordPressArticleGenerator()
         self.wordpress_poster = WordPress_Poster(wp_url, wp_username, wp_password)
         self.spreadsheet_manager = SpreadsheetManager()
@@ -250,7 +257,9 @@ class VPS_Simple_Orchestrator:
             # Grok分析（エラー時はスキップ）
             grok_result = {}
             try:
+                self.logger.info(f"ハイブリッド分析を開始します: {product_info.get('title', 'unknown')}")
                 grok_result = await self.grok_analyzer.analyze_product(product_info)
+                self.logger.info(f"ハイブリッド分析完了 - キャラ名: {grok_result.get('character_name', '未取得')}")
                 
                 # キャラ名取得チェック
                 if not grok_result.get('character_name') or grok_result.get('character_name').strip() == '':
@@ -339,7 +348,9 @@ class VPS_Simple_Orchestrator:
             # Grok分析（エラー時はスキップ）
             grok_result = {}
             try:
+                self.logger.info(f"ハイブリッド分析を開始します: {product_info.get('title', 'unknown')}")
                 grok_result = await self.grok_analyzer.analyze_product(product_info)
+                self.logger.info(f"ハイブリッド分析完了 - キャラ名: {grok_result.get('character_name', '未取得')}")
                 
                 # キャラ名取得チェック
                 if not grok_result.get('character_name') or grok_result.get('character_name').strip() == '':
