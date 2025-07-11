@@ -35,6 +35,11 @@ class VPS_Simple_Orchestrator:
         wp_username = os.getenv('WP_USERNAME')
         wp_password = os.getenv('WP_APP_PASSWORD') or os.getenv('WP_PASSWORD')
         
+        # ログ設定を先に初期化
+        self.logger = get_logger(__name__)
+        self.monitor = Monitor()
+        self.error_logger = Error_Logger()
+        
         # コンポーネントの初期化
         self.fanza_retriever = FANZA_Data_Retriever()
         
@@ -48,8 +53,6 @@ class VPS_Simple_Orchestrator:
         self.article_generator = WordPressArticleGenerator()
         self.wordpress_poster = WordPress_Poster(wp_url, wp_username, wp_password)
         self.spreadsheet_manager = SpreadsheetManager()
-        self.monitor = Monitor()
-        self.error_logger = Error_Logger()
         
         # ロガーの設定
         self.article_generator.logger = self.error_logger
