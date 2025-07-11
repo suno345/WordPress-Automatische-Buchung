@@ -38,7 +38,7 @@ class Hybrid_Analyzer:
             self.logger.info(f"ハイブリッド分析開始: {product_info.get('title', 'unknown')}")
             
             # Step 1: Geminiでキャラクター分析
-            self.logger.debug("Gemini キャラクター分析開始")
+            self.logger.info("Gemini キャラクター分析開始")
             character_result = await self.gemini_analyzer.analyze_product(product_info)
             
             # キャラクター分析結果をログ
@@ -47,8 +47,9 @@ class Hybrid_Analyzer:
             self.logger.info(f"Gemini 分析結果: {character_name} (信頼度: {confidence}%)")
             
             # Step 2: Grokで説明文生成
-            self.logger.debug("Grok 説明文生成開始")
+            self.logger.info("Grok 説明文生成開始")
             description = await self.grok_generator.generate_description(product_info, character_result)
+            self.logger.info(f"Grok 説明文生成完了: {len(description) if description else 0}文字")
             
             # 結果統合
             final_result = {

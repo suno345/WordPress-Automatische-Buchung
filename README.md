@@ -14,19 +14,48 @@ VPS向けに最適化された同人作品のWordPress自動投稿システム�
 
 1. リポジトリのクローン
 ```bash
-git clone https://github.com/suno345/WordPress-Automatische-Buchung.git
-cd WordPress-Automatische-Buchung
+git clone https://github.com/suno345/WordPress-Automatische-Buchung.git wordpress-auto-post
+cd wordpress-auto-post
 ```
 
-2. 依存関係のインストール
+2. Python仮想環境の作成
 ```bash
-pip install -r requirements.txt
+python3 -m venv venv
+source venv/bin/activate  # Linux/Mac
+# venv\Scripts\activate  # Windows
 ```
 
-3. 環境変数の設定
+3. 依存関係のインストール
 ```bash
-cp API.env .env
-# .envファイルを編集してAPIキーなどを設定
+pip install -r requirements.txt beautifulsoup4 lxml
+```
+
+4. 環境変数の設定
+```bash
+cp .env.vps.example .env
+nano .env  # 実際の値を設定
+```
+
+### 必須の環境変数
+
+```bash
+# FANZA API（商品情報取得用）
+FANZA_API_ID=your_api_id
+FANZA_AFFILIATE_ID=your_affiliate_id
+
+# Gemini API（キャラクター認識用）
+GEMINI_API_KEY=your_gemini_api_key
+
+# Grok API（記事生成用）
+GROK_API_KEY=your_grok_api_key
+
+# WordPress
+WP_URL=https://your-site.com
+WP_USERNAME=your_username
+WP_APP_PASSWORD=your_app_password
+
+# Google Sheets（オプション）
+GOOGLE_SHEETS_ID=your_sheet_id
 ```
 
 ## VPSサーバーでの実行
@@ -42,12 +71,30 @@ cp API.env .env
 
 ## 使用方法
 
+### 基本コマンド
+
 ```bash
-# 日次投稿
+# 仮想環境をアクティベート
+source venv/bin/activate
+
+# 日次投稿（最新商品から3件）
 python src/vps_main.py --mode daily --max-posts 3
 
 # キーワード投稿
 python src/vps_main.py --mode keyword --keyword "キーワード" --max-posts 2
+
+# デバッグモード（詳細ログ表示）
+python src/vps_main.py --mode daily --max-posts 1 --debug
+```
+
+### トラブルシューティング
+
+```bash
+# APIキー設定確認
+python -c "from dotenv import load_dotenv; import os; load_dotenv(); print('GEMINI_API_KEY:', bool(os.getenv('GEMINI_API_KEY'))); print('GROK_API_KEY:', bool(os.getenv('GROK_API_KEY')))"
+
+# ログ確認
+tail -f logs/error_*.log
 ```
 
 ## ライセンス

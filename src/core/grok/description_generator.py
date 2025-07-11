@@ -37,7 +37,8 @@ class Grok_Description_Generator:
         self.load_prompts()
         
         if not self.api_key:
-            raise ValueError("GROK_API_KEY が設定されていません")
+            self.logger.warning("GROK_API_KEY が設定されていません - Grok説明文生成は無効化されます")
+            self.api_key = None
     
     def load_prompts(self):
         """プロンプトを読み込み"""
@@ -112,10 +113,19 @@ class Grok_Description_Generator:
     async def generate_description(self, product_info: Dict[str, Any], character_info: Dict[str, Any]) -> str:
         """商品説明文を生成"""
         try:
+            self.logger.debug(f"Grok説明文生成開始: {product_info.get('title', 'unknown')}")
+            
+            # APIキーチェック
+            if not self.api_key:
+                self.logger.warning("GROK_API_KEY が設定されていないため、基本的な説明文を生成します")
+                return self.get_default_description(product_info, character_info)
+            
             # キャラクター情報の信頼度チェック
             confidence = character_info.get('confidence', 0)
             character_name = character_info.get('character_name', '') if confidence >= 50 else ''
             original_work = character_info.get('original_work', '') if confidence >= 50 else ''
+            
+            self.logger.debug(f"キャラクター情報: {character_name} (信頼度: {confidence}%)")
             
             # プロンプトに情報を埋め込み
             formatted_prompt = self.description_prompt.format(

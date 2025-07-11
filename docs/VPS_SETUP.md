@@ -22,23 +22,25 @@ VPS向けに最適化された軽量版WordPress自動投稿システムのセ�
 ### 2. 手動展開
 
 ```bash
-# 1. プロジェクトディレクトリ作成
-mkdir -p /home/$(whoami)/wordpress-auto-post
-cd /home/$(whoami)/wordpress-auto-post
+# 1. リポジトリクローン
+cd /home/$(whoami)
+git clone https://github.com/suno345/WordPress-Automatische-Buchung.git wordpress-auto-post
+cd wordpress-auto-post
 
-# 2. ファイルアップロード（scp、git clone等）
-# ローカルファイルをVPSにアップロード
-
-# 3. Python仮想環境作成
+# 2. Python仮想環境作成
 python3 -m venv venv
 source venv/bin/activate
 
-# 4. 依存関係インストール
-pip install -r requirements.txt
+# 3. 依存関係インストール
+pip install -r requirements.txt beautifulsoup4 lxml
 
-# 5. 環境設定
+# 4. 環境設定
 cp .env.vps.example .env
 nano .env  # APIキー等を設定
+
+# 5. Googleサービスアカウントファイル配置
+mkdir -p config
+# config/wordpress-auto-post-service-account.json をアップロード
 ```
 
 ## ⚙️ 設定ファイル
@@ -46,19 +48,34 @@ nano .env  # APIキー等を設定
 `.env`ファイルで以下を設定：
 
 ```bash
-# VPS向け軽量設定
-VPS_MAX_CONCURRENT_TASKS=2      # 同時実行数制限
-VPS_POSTS_PER_RUN=3            # 1回の投稿数制限
-
-# API設定
+# FANZA API設定
 FANZA_API_ID=your_api_id
+FANZA_AFFILIATE_ID=your_affiliate_id
+DMM_API_ID=your_api_id
+DMM_AFFILIATE_ID=your_affiliate_id
+
+# Gemini API（キャラクター認識用）
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-2.5-pro
+
+# Grok API（記事生成用）
 GROK_API_KEY=your_grok_key
+GROK_BASE_URL=https://api.x.ai/v1
+GROK_MODEL=grok-2-1212
+
+# WordPress設定
 WP_URL=https://your-site.com
 WP_USERNAME=your_username
-WP_PASSWORD=your_app_password
+WP_APP_PASSWORD=your_app_password
 
-# Google Sheets
+# Google Sheets（オプション）
 GOOGLE_SHEETS_ID=your_sheet_id
+GOOGLE_APPLICATION_CREDENTIALS=/home/user/wordpress-auto-post/config/wordpress-auto-post-service-account.json
+
+# VPS向け軽量設定
+VPS_MAX_CONCURRENT_TASKS=2
+VPS_POSTS_PER_RUN=3
+MAX_SAMPLE_IMAGES=15
 ```
 
 ## 🤖 cron自動実行設定

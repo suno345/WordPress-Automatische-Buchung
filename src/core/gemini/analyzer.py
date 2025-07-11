@@ -38,7 +38,8 @@ class Gemini_Analyzer:
         self.load_prompts()
         
         if not self.api_key:
-            raise ValueError("GEMINI_API_KEY が設定されていません")
+            self.logger.warning("GEMINI_API_KEY が設定されていません - Gemini分析は無効化されます")
+            self.api_key = None
     
     def load_prompts(self):
         """プロンプトを読み込み"""
@@ -207,6 +208,13 @@ class Gemini_Analyzer:
     async def analyze_product(self, product_info: Dict[str, Any]) -> Dict[str, Any]:
         """商品のキャラクター分析のみ実行（説明文生成はGrokが担当）"""
         try:
+            self.logger.debug(f"Gemini分析開始: {product_info.get('title', 'unknown')}")
+            
+            # APIキーチェック
+            if not self.api_key:
+                self.logger.warning("GEMINI_API_KEY が設定されていないため、分析をスキップします")
+                return self.get_empty_result("APIキー未設定")
+            
             # 画像URL取得
             image_urls = product_info.get('sample_images', [])
             if not image_urls and 'imageURL' in product_info:
@@ -215,6 +223,8 @@ class Gemini_Analyzer:
                     image_urls = [product_info['imageURL'].get('large', '')]
                 else:
                     image_urls = [product_info['imageURL']]
+            
+            self.logger.debug(f"分析対象画像数: {len(image_urls)}")
             
             # キャラクター分析のみ実行
             character_result = await self.analyze_character_from_images(image_urls, product_info)
