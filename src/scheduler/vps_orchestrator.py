@@ -138,8 +138,8 @@ class VPS_Simple_Orchestrator:
                     
                     self.logger.info(f"予約投稿処理 {success_count + 1}/48 - キーワード: '{keyword}' (キャラ: {character_name}) - 予定時刻: {scheduled_time.strftime('%m/%d %H:%M')}")
                     
-                    # キーワードで商品検索
-                    products = await self.fanza_retriever.hybrid_search_products(keyword, limit=20)
+                    # キーワードで商品検索（人気順30件）
+                    products = await self.fanza_retriever.hybrid_search_products(keyword, limit=30)
                     
                     if not products:
                         self.logger.warning(f"キーワード '{keyword}' で商品が見つかりません - 30秒後にリトライ")
