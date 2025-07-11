@@ -191,4 +191,14 @@ def get_logger(name: str) -> logging.Logger:
     Returns:
         ロガーインスタンス
     """
-    return logging.getLogger(name) 
+    logger = logging.getLogger(name)
+    
+    # ロガーが未設定の場合は設定を行う
+    if not logger.handlers:
+        return setup_logger(name)
+    
+    # ログレベルがNOTSETの場合はINFOに設定
+    if logger.level == logging.NOTSET:
+        logger.setLevel(logging.INFO)
+    
+    return logger 

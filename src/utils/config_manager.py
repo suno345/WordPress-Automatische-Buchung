@@ -248,4 +248,27 @@ class Config_Manager:
             return self.save_config()
         except Exception as e:
             self.logger.error(f"設定のリセットに失敗しました: {e}")
-            return False 
+            return False
+
+    def get_log_config(self) -> Dict[str, Any]:
+        """
+        ログ設定を取得する
+
+        Returns:
+            Dict[str, Any]: ログ設定
+        """
+        import logging
+        from pathlib import Path
+        
+        log_config = self.config.get("logging", {})
+        
+        # ログレベルの変換
+        log_level_str = log_config.get("level", "INFO").upper()
+        log_level = getattr(logging, log_level_str, logging.INFO)
+        
+        return {
+            "log_level": log_level,
+            "log_dir": Path("logs"),
+            "log_format": log_config.get("format", "%(asctime)s - %(name)s - %(levelname)s - %(message)s"),
+            "log_file": log_config.get("file", "logs/app.log")
+        } 
