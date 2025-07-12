@@ -102,21 +102,43 @@ class WordPressArticleGenerator:
             "<figure class='wp-block-table'><table><tbody>"
         ]
         
-        # サークル名
-        if 'maker' in product_info:
-            table.append(f"<tr><td>サークル名</td><td>{product_info['maker'][0]}</td></tr>")
+        # サークル名（複数フィールド対応）
+        circle_name = product_info.get('circle_name', '')
+        if not circle_name and 'maker' in product_info:
+            if isinstance(product_info['maker'], list) and product_info['maker']:
+                circle_name = product_info['maker'][0]['name'] if isinstance(product_info['maker'][0], dict) else product_info['maker'][0]
+            elif isinstance(product_info['maker'], str):
+                circle_name = product_info['maker']
+        if self._is_valid_data(circle_name):
+            table.append(f"<tr><td>サークル名</td><td>{circle_name.strip()}</td></tr>")
         
-        # 作者名
-        if 'author' in product_info:
-            table.append(f"<tr><td>作者名</td><td>{product_info['author'][0]}</td></tr>")
+        # 作者名（複数フィールド対応）
+        author_name = product_info.get('author_name', '') or product_info.get('author', '')
+        if author_name:
+            if isinstance(author_name, list) and author_name:
+                author_name = author_name[0]['name'] if isinstance(author_name[0], dict) else author_name[0]
+            if self._is_valid_data(author_name):
+                table.append(f"<tr><td>作者名</td><td>{author_name.strip()}</td></tr>")
         
-        # 原作名
-        if 'original_work' in grok_result:
-            table.append(f"<tr><td>原作名</td><td>{grok_result['original_work']}</td></tr>")
+        # 原作名（複数ソース対応）
+        original_work = grok_result.get('original_work', '') or product_info.get('original_work', '')
+        if self._is_valid_data(original_work):
+            table.append(f"<tr><td>原作名</td><td>{original_work.strip()}</td></tr>")
         
-        # キャラクター名
-        if 'character_name' in grok_result:
-            table.append(f"<tr><td>キャラクター名</td><td>{grok_result['character_name']}</td></tr>")
+        # キャラクター名（複数ソース対応）
+        character_name = grok_result.get('character_name', '') or product_info.get('character_name', '')
+        if self._is_valid_data(character_name):
+            table.append(f"<tr><td>キャラクター名</td><td>{character_name.strip()}</td></tr>")
+        
+        # 商品形式（新規追加）
+        product_format = product_info.get('product_format', '')
+        if self._is_valid_data(product_format):
+            table.append(f"<tr><td>形式</td><td>{product_format.strip()}</td></tr>")
+        
+        # ページ数（新規追加）
+        page_count = product_info.get('page_count', '')
+        if page_count and str(page_count).strip() and str(page_count).strip() != '0':
+            table.append(f"<tr><td>ページ数</td><td>{str(page_count).strip()}</td></tr>")
         
         table.extend([
             "</tbody></table></figure>",

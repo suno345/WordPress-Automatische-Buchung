@@ -21,7 +21,7 @@ class WordPressPoster:
         self.session = requests.Session()
         self.session.auth = (self.wp_username, self.wp_password)
 
-    def create_post(self, title: str, content: str, categories: List[int] = None, tags: List[int] = None, featured_media: int = None, status: str = 'publish', date: str = None, meta_input: Dict[str, Any] = None, slug: str = None) -> Dict[str, Any]:
+    def create_post(self, title: str, content: str, categories: List[int] = None, tags: List[int] = None, featured_media: int = None, status: str = 'publish', date: str = None, meta_input: Dict[str, Any] = None, slug: str = None, custom_taxonomies: Dict[str, Any] = None) -> Dict[str, Any]:
         """投稿の作成"""
         # カテゴリとタグが文字列のリストの場合、IDに変換
         if categories and isinstance(categories, list) and len(categories) > 0 and isinstance(categories[0], str):
@@ -50,6 +50,11 @@ class WordPressPoster:
         if slug:
             # スラッグ（URL末尾）を設定
             data['slug'] = slug
+        if custom_taxonomies:
+            # カスタムタクソノミーを設定
+            for taxonomy_name, taxonomy_value in custom_taxonomies.items():
+                if taxonomy_value:
+                    data[taxonomy_name] = taxonomy_value
 
         response = self.session.post(f"{self.api_url}/posts", json=data)
         response.raise_for_status()
@@ -175,7 +180,7 @@ class WordPressPoster:
         """下書きの作成"""
         return self.create_post(title, content, categories, tags, featured_media, status='draft')
     
-    def create_scheduled_post(self, title: str, content: str, scheduled_date: str, categories: List[int] = None, tags: List[int] = None, featured_media: int = None, meta_input: Dict[str, Any] = None, slug: str = None) -> Dict[str, Any]:
+    def create_scheduled_post(self, title: str, content: str, scheduled_date: str, categories: List[int] = None, tags: List[int] = None, featured_media: int = None, meta_input: Dict[str, Any] = None, slug: str = None, custom_taxonomies: Dict[str, Any] = None) -> Dict[str, Any]:
         """予約投稿の作成"""
         data = {
             'title': title,
@@ -193,6 +198,11 @@ class WordPressPoster:
             data['meta'] = meta_input
         if slug:
             data['slug'] = slug
+        if custom_taxonomies:
+            # カスタムタクソノミーを設定
+            for taxonomy_name, taxonomy_value in custom_taxonomies.items():
+                if taxonomy_value:
+                    data[taxonomy_name] = taxonomy_value
 
         try:
             self.logger.debug(f"WordPress予約投稿リクエスト - URL: {self.api_url}/posts")
@@ -264,6 +274,7 @@ class WordPressPoster:
             featured_media = article_data.get('featured_media')
             meta_input = article_data.get('meta_input', {})  # カスタムフィールド追加
             slug = article_data.get('slug', '')  # スラッグ追加
+            custom_taxonomies = article_data.get('custom_taxonomies', {})  # カスタムタクソノミー追加
             
             # タグ・カテゴリをIDに変換
             if categories and len(categories) > 0 and isinstance(categories[0], str):
@@ -271,7 +282,7 @@ class WordPressPoster:
             if tags and len(tags) > 0 and isinstance(tags[0], str):
                 tags = self.convert_tags_to_ids(tags)
             
-            result = self.create_scheduled_post(title, content, scheduled_date, categories, tags, featured_media, meta_input, slug)
+            result = self.create_scheduled_post(title, content, scheduled_date, categories, tags, featured_media, meta_input, slug, custom_taxonomies)
             return {'post_id': result.get('id'), 'url': result.get('link')}
         except Exception as e:
             self.logger.error(f"予約投稿エラー: {str(e)}")
