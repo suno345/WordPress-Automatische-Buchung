@@ -51,10 +51,10 @@ class WordPressPoster:
             # スラッグ（URL末尾）を設定
             data['slug'] = slug
         if custom_taxonomies:
-            # カスタムタクソノミーを設定
-            for taxonomy_name, taxonomy_value in custom_taxonomies.items():
-                if taxonomy_value:
-                    data[taxonomy_name] = taxonomy_value
+            # カスタムタクソノミーをIDに変換して設定
+            converted_taxonomies = self.convert_custom_taxonomies_to_ids(custom_taxonomies)
+            for taxonomy_name, taxonomy_ids in converted_taxonomies.items():
+                data[taxonomy_name] = taxonomy_ids
 
         response = self.session.post(f"{self.api_url}/posts", json=data)
         response.raise_for_status()
@@ -163,6 +163,49 @@ class WordPressPoster:
                 except Exception as e:
                     self.logger.warning(f"カテゴリ変換失敗: {category_name} - {str(e)}")
         return category_ids
+    
+    def get_custom_taxonomy_term(self, taxonomy: str, term_name: str) -> Optional[Dict[str, Any]]:
+        """カスタムタクソノミーのタームを取得"""
+        try:
+            response = self.session.get(f"{self.api_url}/{taxonomy}", params={'search': term_name})
+            response.raise_for_status()
+            terms = response.json()
+            return next((term for term in terms if term['name'] == term_name), None)
+        except Exception as e:
+            self.logger.error(f"カスタムタクソノミー取得エラー ({taxonomy}/{term_name}): {str(e)}")
+            return None
+    
+    def create_custom_taxonomy_term(self, taxonomy: str, term_name: str) -> Optional[Dict[str, Any]]:
+        """カスタムタクソノミーのタームを作成"""
+        try:
+            data = {'name': term_name}
+            response = self.session.post(f"{self.api_url}/{taxonomy}", json=data)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            self.logger.error(f"カスタムタクソノミー作成エラー ({taxonomy}/{term_name}): {str(e)}")
+            return None
+    
+    def ensure_custom_taxonomy_exists(self, taxonomy: str, term_name: str) -> Optional[Dict[str, Any]]:
+        """カスタムタクソノミーのタームの存在確認と作成"""
+        term = self.get_custom_taxonomy_term(taxonomy, term_name)
+        if not term:
+            term = self.create_custom_taxonomy_term(taxonomy, term_name)
+        return term
+    
+    def convert_custom_taxonomies_to_ids(self, custom_taxonomies: Dict[str, str]) -> Dict[str, List[int]]:
+        """カスタムタクソノミーの値をIDに変換"""
+        converted = {}
+        for taxonomy_name, taxonomy_value in custom_taxonomies.items():
+            if taxonomy_value and isinstance(taxonomy_value, str):
+                try:
+                    term = self.ensure_custom_taxonomy_exists(taxonomy_name, taxonomy_value.strip())
+                    if term and 'id' in term:
+                        converted[taxonomy_name] = [term['id']]
+                        self.logger.debug(f"カスタムタクソノミー変換: {taxonomy_name} '{taxonomy_value}' -> ID {term['id']}")
+                except Exception as e:
+                    self.logger.warning(f"カスタムタクソノミー変換失敗 ({taxonomy_name}/{taxonomy_value}): {str(e)}")
+        return converted
 
     def test_media_upload(self, file_path: str) -> Dict[str, Any]:
         """メディアアップロードのテスト"""
@@ -199,10 +242,10 @@ class WordPressPoster:
         if slug:
             data['slug'] = slug
         if custom_taxonomies:
-            # カスタムタクソノミーを設定
-            for taxonomy_name, taxonomy_value in custom_taxonomies.items():
-                if taxonomy_value:
-                    data[taxonomy_name] = taxonomy_value
+            # カスタムタクソノミーをIDに変換して設定
+            converted_taxonomies = self.convert_custom_taxonomies_to_ids(custom_taxonomies)
+            for taxonomy_name, taxonomy_ids in converted_taxonomies.items():
+                data[taxonomy_name] = taxonomy_ids
 
         try:
             self.logger.debug(f"WordPress予約投稿リクエスト - URL: {self.api_url}/posts")
