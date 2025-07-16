@@ -4,6 +4,8 @@ WordPress記事生成モジュール
 from typing import Dict, Any
 import os
 from dotenv import load_dotenv
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+from pathlib import Path
 
 class WordPressArticleGenerator:
     """WordPress記事生成クラス"""
@@ -12,6 +14,10 @@ class WordPressArticleGenerator:
         """初期化"""
         load_dotenv()
         self.logger = None  # ロガーは後で設定
+        
+        # テンプレートエンジンの初期化
+        self.template_env = None
+        self._init_template_engine()
         
     def generate_article_content(self, product_info: Dict[str, Any], grok_result: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -34,7 +40,7 @@ class WordPressArticleGenerator:
             # 記事データの生成
             article_data = {
                 'title': self._generate_title(product_info, grok_result),
-                'content': self._generate_content(product_info, grok_result),
+                'content': self._generate_content_with_template(product_info, grok_result),
                 'status': 'draft',  # 下書きとして保存
                 'categories': self._get_categories(product_info),
                 'tags': self._get_tags(product_info, grok_result),
@@ -77,6 +83,9 @@ class WordPressArticleGenerator:
         
         # アフィリエイトリンク
         content_parts.append(self._generate_affiliate_link(product_info))
+        
+        # 無料で読める？セクション
+        content_parts.append(self._generate_free_reading_section(product_info, grok_result))
         
         return '\n\n'.join(content_parts)
     
@@ -198,6 +207,204 @@ class WordPressArticleGenerator:
         
         return f"<!-- wp:paragraph -->\n<p>{story_content}</p>\n<!-- /wp:paragraph -->"
     
+    def _generate_free_reading_section(self, product_info: Dict[str, Any], grok_result: Dict[str, Any]) -> str:
+        """無料で読める？セクションを生成（SEO強化版）"""
+        title = product_info.get('title', '')
+        character_name = grok_result.get('character_name', '') or product_info.get('character_name', '')
+        original_work = grok_result.get('original_work', '') or product_info.get('original_work', '')
+        
+        # タイトルとキャラクター名の組み合わせ
+        if character_name and self._is_valid_data(character_name):
+            full_title = f"{title}【{character_name}】"
+            seo_keyword = f"{character_name} 同人"
+        else:
+            full_title = title
+            seo_keyword = f"{title} 同人"
+        
+        # 原作名がある場合はSEOキーワードに追加
+        if original_work and self._is_valid_data(original_work):
+            seo_keyword = f"{original_work} {seo_keyword}"
+        
+        section_html = f'''<!-- wp:heading -->
+<h2>漫画『{full_title}』は漫甾rawやhitomiで無料で読める？</h2>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph -->
+<p>漫甾rawやhitomi、momon:GA（モモンガ）などの海賊版サイトを使えば、{full_title}を全巻無料で読めるかもしれません。しかし、海賊版サイトを利用するのは控えましょう。</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph -->
+<p>無断転載している違法の海賊版サイトを使うと、{full_title}を全巻無料で読める反面、以下のリスクが生じるからです。</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:list -->
+<ul>
+<li>デバイスの故障</li>
+<li>ウイルス感染</li>
+<li>個人情報の漏洩</li>
+<li>摘発・逮捕</li>
+</ul>
+<!-- /wp:list -->
+
+<!-- wp:paragraph -->
+<p>{full_title}を全巻無料で読めるのは魅力的ですが、違法の海賊版サイトを使うことで、より大きなお金や社会的地位を失う恐れがあります。</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph -->
+<p>そのため、違法の海賊版サイトを使うのは控えるべきです。</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph -->
+<p>{full_title}を無料で読むなら、合法的に無料配信している電子書籍サイトを利用しましょう。</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:heading {{"level":3}} -->
+<h3>{seo_keyword} rawで検索しても危険！</h3>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph -->
+<p>「{seo_keyword} raw」などで検索して海賊版サイトを探すのは、前述のリスクがあるため大変危険です。</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph -->
+<p>本作品はFANZA公式サイトで正規購入できます。高品質な作品を適正な価格で楽しみ、クリエイターを応援しましょう。</p>
+<!-- /wp:paragraph -->'''
+        
+        return section_html
+    
+    def _init_template_engine(self):
+        """テンプレートエンジンを初期化"""
+        try:
+            # プロジェクトのルートディレクトリを取得
+            project_root = Path(__file__).parent.parent.parent.parent
+            template_dir = project_root / "templates"
+            
+            if template_dir.exists():
+                self.template_env = Environment(
+                    loader=FileSystemLoader(str(template_dir)),
+                    autoescape=select_autoescape(['html', 'xml']),
+                    trim_blocks=True,
+                    lstrip_blocks=True
+                )
+                if self.logger:
+                    self.logger.info(f"テンプレートディレクトリを初期化: {template_dir}")
+            else:
+                if self.logger:
+                    self.logger.warning(f"テンプレートディレクトリが見つかりません: {template_dir}")
+        except Exception as e:
+            if self.logger:
+                self.logger.error(f"テンプレートエンジン初期化エラー: {str(e)}")
+            self.template_env = None
+    
+    def _load_template(self, template_name: str):
+        """テンプレートを読み込み"""
+        if not self.template_env:
+            return None
+        
+        try:
+            return self.template_env.get_template(template_name)
+        except Exception as e:
+            if self.logger:
+                self.logger.error(f"テンプレート読み込みエラー: {template_name} - {str(e)}")
+            return None
+    
+    def _prepare_template_data(self, product_info: Dict[str, Any], grok_result: Dict[str, Any]) -> Dict[str, Any]:
+        """テンプレート用のデータ構造を準備"""
+        # キャラクター名と原作名を取得
+        character_name = grok_result.get('character_name', '') or product_info.get('character_name', '')
+        original_work = grok_result.get('original_work', '') or product_info.get('original_work', '')
+        
+        # テンプレート用データ構造
+        template_data = {
+            'product': {
+                'title': product_info.get('title', ''),
+                'description': product_info.get('description', ''),
+                'affiliate_url': product_info.get('affiliateURL', ''),
+                'sample_images': self._format_sample_images(product_info),
+                'page_count': product_info.get('page_count', '')
+            },
+            'taxonomies': {
+                'custom': {
+                    'circle_name': [product_info.get('circle_name', '')] if product_info.get('circle_name') else [],
+                    'character_name': [character_name] if character_name and self._is_valid_data(character_name) else [],
+                    'original_work': [original_work] if original_work and self._is_valid_data(original_work) else [],
+                    'product_format': [product_info.get('product_format', '')] if product_info.get('product_format') else []
+                },
+                'tags': self._get_tags(product_info, grok_result)
+            }
+        }
+        
+        return template_data
+    
+    def _format_sample_images(self, product_info: Dict[str, Any]) -> list:
+        """サンプル画像をテンプレート用にフォーマット"""
+        sample_images = product_info.get('sample_images', [])
+        
+        # 旧形式との互換性
+        if not sample_images and 'sampleImageURL' in product_info:
+            sample_images = list(product_info['sampleImageURL'].values())
+        
+        # テンプレート用にフォーマット
+        formatted_images = []
+        for img_url in sample_images:
+            if img_url:  # 空文字列チェック
+                formatted_images.append({
+                    'url': img_url,
+                    'alt': 'サンプル画像'
+                })
+        
+        return formatted_images
+    
+    def _generate_content_with_template(self, product_info: Dict[str, Any], grok_result: Dict[str, Any]) -> str:
+        """テンプレートを使用してコンテンツを生成"""
+        template = self._load_template('article.html')
+        
+        if not template:
+            # テンプレートが利用できない場合は既存ロジックを使用
+            return self._generate_content_legacy(product_info, grok_result)
+        
+        try:
+            # テンプレート用データを準備
+            template_data = self._prepare_template_data(product_info, grok_result)
+            
+            # テンプレートをレンダリング
+            rendered_content = template.render(**template_data)
+            
+            if self.logger:
+                self.logger.info("テンプレートを使用してコンテンツを生成")
+            
+            return rendered_content
+            
+        except Exception as e:
+            if self.logger:
+                self.logger.error(f"テンプレートレンダリングエラー: {str(e)}")
+            # エラー時は既存ロジックを使用
+            return self._generate_content_legacy(product_info, grok_result)
+    
+    def _generate_content_legacy(self, product_info: Dict[str, Any], grok_result: Dict[str, Any]) -> str:
+        """既存のコンテンツ生成ロジック（フォールバック）"""
+        content_parts = []
+        
+        # リード文
+        content_parts.append(self._generate_lead(product_info, grok_result))
+        
+        # 情報テーブル
+        content_parts.append(self._generate_info_table(product_info, grok_result))
+        
+        # 画像ギャラリー
+        content_parts.append(self._generate_image_gallery(product_info))
+        
+        # ストーリー
+        content_parts.append(self._generate_story(product_info))
+        
+        # アフィリエイトリンク
+        content_parts.append(self._generate_affiliate_link(product_info))
+        
+        # 無料で読める？セクション
+        content_parts.append(self._generate_free_reading_section(product_info, grok_result))
+        
+        return '\n\n'.join(content_parts)
+    
     def _generate_affiliate_link(self, product_info: Dict[str, Any]) -> str:
         """アフィリエイトリンクを生成"""
         # 既存のaffiliateURLがある場合はそれを使用
@@ -231,7 +438,7 @@ class WordPressArticleGenerator:
             
         return (
             "<!-- wp:button -->\n"
-            f"<div class='wp-block-button'><a class='wp-block-button__link' href='{affiliate_url}' target='_blank' rel='noopener'>"
+            f"<div class='swell-block-button'><a class='swell-block-button__link' href='{affiliate_url}' target='_blank' rel='noopener'>"
             "FANZAでこの作品をチェックする</a></div>\n"
             "<!-- /wp:button -->"
         )

@@ -93,7 +93,7 @@
     <div class="wp-block-buttons">
         <div class="wp-block-button">
             <a class="wp-block-button__link" href="{{ product.affiliate_url }}" style="background-color: #ff6600;">
-                FANZAでこの作品をチェックする
+                続きはこちら
             </a>
         </div>
     </div>
@@ -101,8 +101,30 @@
 
 <!-- 無料で読める？セクション -->
 <div class="p-entry__content">
-    <h2 class="c-heading">「{{ product.title }}{% if taxonomies.custom.character_name %}【{{ taxonomies.custom.character_name[0] }}】{% endif %}」は無料で読める？</h2>
-    <p>結論からお伝えすると、この作品はFANZAでの購入が必要な有料作品です。無料試し読みが可能な場合もありますが、全編を無料で読むことはできません。高品質な作品を適正な価格で楽しみましょう。</p>
+    <h2 class="c-heading">漫画『{{ product.title }}{% if taxonomies.custom.character_name %}【{{ taxonomies.custom.character_name[0] }}】{% endif %}』は漫画rawやhitomiで無料で読める？</h2>
+    
+    <p>漫画rawやhitomi、momon:GA（モモンガ）などの海賊版サイトを使えば、{{ product.title }}{% if taxonomies.custom.character_name %}【{{ taxonomies.custom.character_name[0] }}】{% endif %}を全巻無料で読めるかもしれません。しかし、海賊版サイトを利用するのは控えましょう。</p>
+    
+    <p>無断転載している違法の海賊版サイトを使うと、{{ product.title }}{% if taxonomies.custom.character_name %}【{{ taxonomies.custom.character_name[0] }}】{% endif %}を全巻無料で読める反面、以下のリスクが生じるからです。</p>
+    
+    <ul>
+        <li>デバイスの故障</li>
+        <li>ウイルス感染</li>
+        <li>個人情報の漏洩</li>
+        <li>摘発・逮捕</li>
+    </ul>
+    
+    <p>{{ product.title }}{% if taxonomies.custom.character_name %}【{{ taxonomies.custom.character_name[0] }}】{% endif %}を全巻無料で読めるのは魅力的ですが、違法の海賊版サイトを使うことで、より大きなお金や社会的地位を失う恐れがあります。</p>
+    
+    <p>そのため、違法の海賊版サイトを使うのは控えるべきです。</p>
+    
+    <p>{{ product.title }}{% if taxonomies.custom.character_name %}【{{ taxonomies.custom.character_name[0] }}】{% endif %}を無料で読むなら、合法的に無料配信している電子書籍サイトを利用しましょう。</p>
+    
+    <h3 class="c-heading">{% if taxonomies.custom.character_name %}{{ taxonomies.custom.character_name[0] }}{% endif %}{% if taxonomies.custom.original_work %} {{ taxonomies.custom.original_work[0] }}{% endif %} rawで検索しても危険！</h3>
+    
+    <p>「{% if taxonomies.custom.character_name %}{{ taxonomies.custom.character_name[0] }} raw{% endif %}」「{% if taxonomies.custom.original_work %}{{ taxonomies.custom.original_work[0] }} raw{% endif %}」などで検索して海賊版サイトを探すのは、前述のリスクがあるため大変危険です。</p>
+    
+    <p>本作品はFANZA公式サイトで正規購入できます。高品質な作品を適正な価格で楽しみ、クリエイターを応援しましょう。</p>
 </div>
 
 <!-- 関連記事 -->
